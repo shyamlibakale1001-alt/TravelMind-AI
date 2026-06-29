@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearChatBtn = document.getElementById('clear-chat-btn');
   const chatSendBtn = document.getElementById('chat-send-btn');
 
-  const N8N_WEBHOOK_URL = 'https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travel%20planner';
+  const N8N_WEBHOOK_URL = 'https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind-plan';
   const PROTOTYPE_MSG = "Frontend prototype only. Backend integration coming soon.";
   const selectedStyles = new Set();
 
