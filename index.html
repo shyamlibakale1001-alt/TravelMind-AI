@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description"
+    content="Plan personalized trips in seconds based on your budget, travel style, interests, and duration with TravelMind AI.">
+  <title>TravelMind AI - Craft Your Perfect Journey</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <!-- Background Radial Glow Elements -->
+  <div class="hero-bg-glow" aria-hidden="true"></div>
+
+  <!-- --- NAVIGATION BAR --- -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <a href="#" class="logo" id="nav-logo">
+        <i data-lucide="plane"></i> TravelMind AI
+      </a>
+      <ul class="nav-links" id="nav-links">
+        <li><a href="#home" class="nav-link active" id="link-home">Home</a></li>
+        <li><a href="#planner" class="nav-link" id="link-planner">Planner</a></li>
+        <li><a href="#features" class="nav-link" id="link-features">Features</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle Dark Mode">
+          <i data-lucide="moon" class="moon-icon"></i>
+          <i data-lucide="sun" class="sun-icon"></i>
+        </button>
+        <button class="menu-toggle" id="menu-toggle" aria-label="Open Mobile Menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- --- HERO SECTION --- -->
+  <header class="hero container" id="home">
+    <h1>Plan your perfect<br>journey with <span class="gradient-text">us.</span></h1>
+    <p>Plan personalized trips in seconds based on your budget, travel style, interests, and duration.</p>
+    <div class="hero-actions">
+      <a href="#planner" class="premium-btn" id="hero-cta-btn">
+        Start Planning <i data-lucide="arrow-right"></i>
+      </a>
+      <a href="#features" class="premium-btn-secondary" id="hero-sec-btn">
+        Explore Features
+      </a>
+    </div>
+  </header>
+
+  <!-- --- MAIN PLANNER SECTION --- -->
+  <main class="planner-section container" id="planner">
+    <div class="glass-panel planner-card fade-in">
+      <form id="planner-form" onsubmit="return false;">
+        <div class="form-grid">
+
+          <!-- Destination -->
+          <div class="form-group form-group-full">
+            <label for="destination-input"><i data-lucide="map-pin"></i> Destination</label>
+            <div class="input-wrapper">
+              <i data-lucide="search" class="input-icon"></i>
+              <input type="text" id="destination-input" class="form-input"
+                placeholder="Tokyo, Japan or Paris, France..." required>
+            </div>
+          </div>
+
+          <!-- Dates -->
+          <div class="form-group">
+            <label for="start-date-input"><i data-lucide="calendar"></i> Start Date</label>
+            <div class="input-wrapper">
+              <i data-lucide="calendar-days"></i>
+              <input type="date" id="start-date-input" class="form-input" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="end-date-input"><i data-lucide="calendar"></i> End Date</label>
+            <div class="input-wrapper">
+              <i data-lucide="calendar-check"></i>
+              <input type="date" id="end-date-input" class="form-input" required>
+            </div>
+          </div>
+
+          <!-- Budget -->
+          <div class="form-group">
+            <label for="budget-input"><i data-lucide="indian-rupee"></i> Budget</label>
+            <div class="input-wrapper">
+              <span class="input-prefix">₹</span>
+              <input type="number" id="budget-input" class="form-input" style="padding-left: 32px;" placeholder="50,000"
+                min="1000" required>
+            </div>
+          </div>
+
+          <!-- Travelers Select/Input Combo -->
+          <div class="form-group">
+            <label for="travelers-preset"><i data-lucide="users"></i> Travelers</label>
+            <div class="travelers-combo">
+              <div class="input-wrapper" style="width: 60%;">
+                <i data-lucide="users-round" style="z-index: 2;"></i>
+                <select id="travelers-preset" class="form-input" required>
+                  <option value="1">Solo</option>
+                  <option value="2">2 People</option>
+                  <option value="4">Family (4)</option>
+                  <option value="6">Group (6+)</option>
+                  <option value="custom">Custom...</option>
+                </select>
+              </div>
+              <input type="number" id="travelers-count" class="form-input" min="1" max="100" value="1" required>
+            </div>
+          </div>
+
+          <!-- Travel Style Chips -->
+          <div class="form-group form-group-full">
+            <label><i data-lucide="compass"></i> Travel Style (Select multiple)</label>
+            <div class="style-chips" id="style-chips-container">
+              <button type="button" class="chip-btn" data-value="Adventure"><i data-lucide="footprints"></i>
+                Adventure</button>
+              <button type="button" class="chip-btn" data-value="Nature"><i data-lucide="trees"></i> Nature</button>
+              <button type="button" class="chip-btn" data-value="Food"><i data-lucide="utensils-crosscuts"></i>
+                Food</button>
+              <button type="button" class="chip-btn" data-value="Shopping"><i data-lucide="shopping-bag"></i>
+                Shopping</button>
+              <button type="button" class="chip-btn" data-value="Luxury"><i data-lucide="sparkles"></i> Luxury</button>
+              <button type="button" class="chip-btn" data-value="Culture"><i data-lucide="landmark"></i>
+                Culture</button>
+              <button type="button" class="chip-btn" data-value="Nightlife"><i data-lucide="glass-water"></i>
+                Nightlife</button>
+              <button type="button" class="chip-btn" data-value="Relaxation"><i data-lucide="palmtree"></i>
+                Relaxation</button>
+            </div>
+          </div>
+
+          <!-- Additional Preferences -->
+          <div class="form-group form-group-full">
+            <label for="preferences-input"><i data-lucide="sliders"></i> Additional Preferences</label>
+            <textarea id="preferences-input" class="form-input"
+              placeholder="I love hidden gems, local food, photography spots and would like a relaxed itinerary..."></textarea>
+          </div>
+
+        </div>
+
+        <!-- Submit Button -->
+        <div class="submit-btn-container">
+          <button type="submit" class="premium-btn generate-btn" id="generate-btn">
+            ✨ Generate My Trip
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- --- LOADING ANIMATION OVERLAY --- -->
+    <div class="glass-panel loader-overlay" id="planner-loader">
+      <div class="pulse-spinner"></div>
+      <div class="loader-messages" id="loader-msg">Finding the best attractions...</div>
+      <div class="loader-sub">Crafting your detailed travel map & budget guide</div>
+    </div>
+  </main>
+
+  <!-- --- RESULTS SECTION --- -->
+  <section class="results-section container" id="results">
+    <div class="results-header">
+      <span class="badge badge-primary" id="results-badge">Itinerary Ready</span>
+      <h2 id="results-title">Your Custom Trip to Tokyo</h2>
+      <p id="results-subtitle">4 Days • 2 Travelers • Style: Culture, Food</p>
+    </div>
+
+    <div class="results-grid">
+      <!-- Left Column: Day-wise Itinerary -->
+      <div class="left-column">
+        <div class="glass-panel itinerary-card" id="itinerary-timeline-container">
+          <!-- Timelines will be dynamically populated here -->
+        </div>
+      </div>
+
+      <!-- Right Column: Secondary Info -->
+      <div class="right-column">
+
+        <!-- Budget Breakdown -->
+        <div class="glass-panel side-panel" id="budget-breakdown-card">
+          <h3><i data-lucide="pie-chart"></i> Budget Breakdown</h3>
+          <div class="budget-list" id="budget-list-container">
+            <!-- Categories populated dynamically -->
+          </div>
+          <div class="budget-total">
+            <span>Total Estimated Cost</span>
+            <span class="budget-total-val" id="budget-total-cost">₹48,500</span>
+          </div>
+        </div>
+
+        <!-- Weather Forecast -->
+        <div class="glass-panel side-panel" id="weather-card">
+          <h3><i data-lucide="cloud-sun"></i> Weather Forecast</h3>
+          <div class="weather-list" id="weather-list-container">
+            <!-- Weather cards populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Packing Checklist -->
+        <div class="glass-panel side-panel" id="packing-card">
+          <h3><i data-lucide="backpack"></i> Packing Checklist</h3>
+          <div class="packing-list" id="packing-list-container">
+            <!-- Checkbox items populated dynamically -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Recommended Attractions (Full Width Grid) -->
+    <div class="glass-panel side-panel full-width-panel" id="attractions-card">
+      <h3><i data-lucide="map"></i> Recommended Attractions</h3>
+      <div class="grid-cards" id="attractions-grid">
+        <!-- Attraction cards populated dynamically -->
+      </div>
+    </div>
+
+    <!-- Hotel Recommendations (Full Width Grid) -->
+    <div class="glass-panel side-panel full-width-panel" id="hotels-card">
+      <h3><i data-lucide="hotel"></i> Recommended Stays</h3>
+      <div class="grid-cards" id="hotels-grid">
+        <!-- Hotel cards populated dynamically -->
+      </div>
+    </div>
+
+    <!-- Local Foods & Guides (Split Layout) -->
+    <div class="guide-panels-grid">
+      <!-- Local Foods to Try -->
+      <div class="glass-panel side-panel" id="foods-card">
+        <h3><i data-lucide="soup"></i> Local Foods to Try</h3>
+        <div class="foods-grid" id="foods-grid-container">
+          <!-- Food grid populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Transport and Safety -->
+      <div class="right-column">
+        <div class="glass-panel side-panel" id="transport-card">
+          <h3><i data-lucide="bus"></i> Transportation Guide</h3>
+          <div class="transport-list" id="transport-list-container">
+            <!-- Transport options populated dynamically -->
+          </div>
+        </div>
+
+        <div class="glass-panel side-panel" id="safety-card">
+          <h3><i data-lucide="shield-check"></i> Safety & Useful Tips</h3>
+          <div class="safety-tips-list" id="safety-list-container">
+            <!-- Safety items populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- --- FEATURES SECTION --- -->
+  <section class="features-section container reveal" id="features">
+    <div class="section-header">
+      <span class="badge badge-primary">Explore Features</span>
+      <h2>Powerful Features</h2>
+      <p class="section-subtitle">Everything you need to plan your trip smarter, faster, and within budget.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="bot" class="feature-icon"></i>
+        </div>
+        <h3>AI Chatbot</h3>
+        <p>Get instant travel assistance and answers to your travel questions.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="route" class="feature-icon"></i>
+        </div>
+        <h3>Smart Itinerary</h3>
+        <p>Generate personalized day-by-day travel plans.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="wallet" class="feature-icon"></i>
+        </div>
+        <h3>Budget Planner</h3>
+        <p>Plan trips according to your budget with smart cost estimation.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="hotel" class="feature-icon"></i>
+        </div>
+        <h3>Hotel Suggestions</h3>
+        <p>Discover hotels that match your destination and budget.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="cloud-sun" class="feature-icon"></i>
+        </div>
+        <h3>Weather Updates</h3>
+        <p>Receive real-time weather forecasts for your destination.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="compass" class="feature-icon"></i>
+        </div>
+        <h3>Nearby Attractions</h3>
+        <p>Explore popular tourist attractions around you.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="utensils" class="feature-icon"></i>
+        </div>
+        <h3>Restaurant Recommendations</h3>
+        <p>Find highly-rated restaurants and local cuisines.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="map" class="feature-icon"></i>
+        </div>
+        <h3>Maps Integration</h3>
+        <p>Navigate easily with integrated maps and directions.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="mail" class="feature-icon"></i>
+        </div>
+        <h3>Automated Email</h3>
+        <p>Receive your complete itinerary directly in your email.</p>
+      </div>
+
+      <div class="glass-panel feature-card">
+        <div class="feature-icon-wrapper">
+          <i data-lucide="lightbulb" class="feature-icon"></i>
+        </div>
+        <h3>Personalized Travel Tips</h3>
+        <p>AI-generated recommendations based on your preferences.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- FUTURE SCOPE SECTION --- -->
+  <section class="future-scope-section container reveal" id="future-scope">
+    <div class="section-header">
+      <span class="badge badge-primary">Roadmap</span>
+      <h2>Future Scope</h2>
+      <p class="section-subtitle">Upcoming enhancements planned for future versions.</p>
+    </div>
+
+    <div class="future-scope-grid">
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="mic" class="future-icon"></i>
+        </div>
+        <h4>Voice Assistant</h4>
+      </div>
+
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="languages" class="future-icon"></i>
+        </div>
+        <h4>Multiple Language Support</h4>
+      </div>
+
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="plane" class="future-icon"></i>
+        </div>
+        <h4>Flight Booking</h4>
+      </div>
+
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="bookmark" class="future-icon"></i>
+        </div>
+        <h4>Hotel Booking</h4>
+      </div>
+
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="credit-card" class="future-icon"></i>
+        </div>
+        <h4>Payment Gateway</h4>
+      </div>
+
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="wifi-off" class="future-icon"></i>
+        </div>
+        <h4>Offline Itinerary</h4>
+      </div>
+
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="smartphone" class="future-icon"></i>
+        </div>
+        <h4>Mobile Application</h4>
+      </div>
+
+      <div class="glass-panel future-card">
+        <div class="future-icon-wrapper">
+          <i data-lucide="image" class="future-icon"></i>
+        </div>
+        <h4>AI Image Recommendations</h4>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- OPTIONAL AI CHAT ASSISTANT --- -->
+  <section class="chat-section container" id="chat">
+    <div class="glass-panel chat-card">
+
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <div class="chat-header-title">
+          <i data-lucide="sparkles" class="gradient-text"></i>
+          <div class="chat-title-text">
+            <h3>Need to modify your itinerary?</h3>
+            <p><span class="status-dot"></span> TravelMind AI Assistant Online</p>
+          </div>
+        </div>
+        <button class="theme-toggle" id="clear-chat-btn" title="Reset Chat" aria-label="Reset Chat">
+          <i data-lucide="rotate-ccw"></i>
+        </button>
+      </div>
+
+      <!-- Chat Messages Container -->
+      <div class="chat-body" id="chat-messages-container">
+        <div class="chat-msg chat-msg-bot">
+          <div class="chat-avatar"><i data-lucide="bot"></i></div>
+          <div class="chat-msg-bubble">
+            Hello! I can help you adjust your itinerary. Try asking me to reduce budgets, find restaurants, or swap
+            activities!
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggestions chips -->
+      <div class="chat-suggestions-container">
+        <div class="chat-suggestions-title">Suggestions</div>
+        <div class="chat-suggestions" id="chat-suggestions-container">
+          <button class="suggestion-chip" data-query="Replace museums with beaches">🏖️ Replace museums with
+            beaches</button>
+          <button class="suggestion-chip" data-query="Find vegetarian restaurants">🥗 Find vegetarian
+            restaurants</button>
+          <button class="suggestion-chip" data-query="Reduce my budget">💰 Reduce my budget</button>
+          <button class="suggestion-chip" data-query="Add shopping destinations">🛍️ Add shopping destinations</button>
+        </div>
+      </div>
+
+      <!-- Input Form -->
+      <div class="chat-footer">
+        <form id="chat-input-form" onsubmit="return false;" class="chat-input-wrapper">
+          <input type="text" id="chat-input-field" class="chat-input" placeholder="Ask TravelMind AI..." required>
+          <button type="submit" class="premium-btn chat-send-btn" id="chat-send-btn">
+            <i data-lucide="send"></i>
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- --- FOOTER --- -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <div class="footer-info">
+        <h4>✈️ TravelMind AI</h4>
+        <p>Built as an AI-powered travel planner project.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#home">Home</a>
+        <a href="#planner">Planner</a>
+        <a href="#features">Features</a>
+      </div>
+      <div class="footer-copyright">
+        <p>Copyright &copy; 2026 TravelMind AI.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating Back-to-Top Button -->
+  <button id="back-to-top-btn" class="glass-panel back-to-top-btn" aria-label="Back to Top">
+    <i data-lucide="arrow-up"></i>
+  </button>
+
+  <!-- Lucide Icons and Core Logic -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
