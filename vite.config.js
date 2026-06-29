@@ -1,15 +1,16 @@
 import { defineConfig } from 'vite';
+import { readFileSync } from 'fs';
 
-const N8N_NGROK_TARGET = 'https://barista-sliced-outwit.ngrok-free.dev';
+const backend = JSON.parse(readFileSync('./backend.json', 'utf-8'));
 
 export default defineConfig({
   server: {
     proxy: {
-      '/api/n8n': {
-        target: N8N_NGROK_TARGET,
+      [backend.api.proxyPrefix]: {
+        target: backend.api.baseUrl,
         changeOrigin: true,
         secure: true,
-        rewrite: (path) => path.replace(/^\/api\/n8n/, ''),
+        rewrite: (path) => path.replace(new RegExp(`^${backend.api.proxyPrefix}`), ''),
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {
             proxyReq.setHeader('ngrok-skip-browser-warning', 'true');

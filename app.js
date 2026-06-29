@@ -2,8 +2,16 @@
  * TravelMind - Frontend Prototype Logic
  */
 
-const N8N_NGROK_HOST = 'https://barista-sliced-outwit.ngrok-free.dev';
-const N8N_WEBHOOK_PATH = '/webhook/travelmind/plan';
+let backendConfig = null;
+
+async function loadBackendConfig() {
+  const response = await fetch('/backend.json');
+  if (!response.ok) {
+    throw new Error('Could not load backend.json');
+  }
+  backendConfig = await response.json();
+  return backendConfig;
+}
 
 function isLocalViteDev() {
   return (
@@ -13,11 +21,13 @@ function isLocalViteDev() {
 }
 
 function getN8nWebhookUrl() {
-  // Browser requests to ngrok are blocked by CORS — route through Vite proxy in local dev
+  const api = backendConfig.api;
+  const webhookPath = api.webhookPath;
+
   if (isLocalViteDev()) {
-    return `/api/n8n${N8N_WEBHOOK_PATH}`;
+    return `${api.proxyPrefix}${webhookPath}`;
   }
-  return `${N8N_NGROK_HOST}${N8N_WEBHOOK_PATH}`;
+  return `${api.baseUrl}${webhookPath}`;
 }
 
 function formatN8nError(result, status) {
@@ -27,17 +37,23 @@ function formatN8nError(result, status) {
 }
 
 async function getTravelPlan(data) {
+  if (!backendConfig) {
+    await loadBackendConfig();
+  }
+
+  const { api, messages } = backendConfig;
+
   if (window.location.protocol === 'file:') {
-    throw new Error('Open the site with "npm run dev" at http://localhost:5173 (do not open index.html directly).');
+    throw new Error(messages.fileProtocolError);
   }
 
   if (!isLocalViteDev()) {
-    throw new Error('Run "npm run dev" and open http://localhost:5173 so requests can reach n8n without CORS errors.');
+    throw new Error(messages.corsError);
   }
 
   const webhookUrl = getN8nWebhookUrl();
   const requestBody = {
-    apiKey: 'travelmind_secure_001',
+    apiKey: api.apiKey,
     destination: data.destination,
     budget: data.budget,
     days: data.days,
@@ -52,17 +68,12 @@ async function getTravelPlan(data) {
   let response;
   try {
     response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true'
-      },
+      method: api.method,
+      headers: api.headers,
       body: JSON.stringify(requestBody)
     });
   } catch (networkErr) {
-    throw new Error(
-      `Network error (${networkErr.message}). Use "npm run dev", keep ngrok running, and activate your n8n workflow.`
-    );
+    throw new Error(`${messages.networkError} (${networkErr.message})`);
   }
 
   const contentType = response.headers.get('content-type') || '';
@@ -71,7 +82,7 @@ async function getTravelPlan(data) {
   if (!isJson) {
     const text = await response.text();
     if (text.includes('ERR_NGROK') || text.toLowerCase().includes('offline')) {
-      throw new Error('ngrok tunnel is offline. Start ngrok pointing to n8n, then try again.');
+      throw new Error(messages.ngrokOffline);
     }
     throw new Error(`Unexpected response from n8n (${response.status}). Check ngrok and n8n workflow.`);
   }
@@ -98,7 +109,14 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await loadBackendConfig();
+    console.log('[backend] loaded backend.json');
+  } catch (err) {
+    console.error('[backend] failed to load backend.json:', err);
+  }
+
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
   }
@@ -210,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     link.addEventListener('click', () => {
       document.querySelectorAll('.nav-link').forEach(nl => nl.classList.remove('active'));
       link.classList.add('active');
-
+      
       if (navLinks.classList.contains('active')) {
         navLinks.classList.remove('active');
         menuToggle.setAttribute('aria-expanded', 'false');
@@ -221,8 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('scroll', () => {
     if (window.scrollY > 50) {
       navbar.style.boxShadow = 'var(--shadow-card)';
-      navbar.style.background = body.classList.contains('light-mode')
-        ? 'rgba(248, 250, 252, 0.9)'
+      navbar.style.background = body.classList.contains('light-mode') 
+        ? 'rgba(248, 250, 252, 0.9)' 
         : 'rgba(3, 3, 5, 0.85)';
     } else {
       navbar.style.boxShadow = 'none';
@@ -264,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
   styleChipsContainer.addEventListener('click', (e) => {
     const btn = e.target.closest('.chip-btn');
     if (!btn) return;
-
+    
     const styleVal = btn.dataset.value;
     if (selectedStyles.has(styleVal)) {
       selectedStyles.delete(styleVal);
@@ -318,35 +336,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (Array.isArray(days) && days.length > 0) {
       days.forEach((dayData, index) => {
-        const dayEl = document.createElement('div');
-        dayEl.className = 'itinerary-day';
-        dayEl.innerHTML = `
-          <div class="day-header">
+      const dayEl = document.createElement('div');
+      dayEl.className = 'itinerary-day';
+      dayEl.innerHTML = `
+        <div class="day-header">
             <span class="badge badge-primary">Day ${dayData.day || index + 1}</span>
-            <h3>Daily Exploration</h3>
-          </div>
-          <div class="day-timeline">
-            <div class="timeline-item">
-              <div class="timeline-marker"></div>
-              <div class="timeline-time">Morning</div>
-              <div class="timeline-title">Morning Adventure</div>
+          <h3>Daily Exploration</h3>
+        </div>
+        <div class="day-timeline">
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-time">Morning</div>
+            <div class="timeline-title">Morning Adventure</div>
               <div class="timeline-desc">${escapeHtml(dayData.morning || dayData.am || '')}</div>
-            </div>
-            <div class="timeline-item">
-              <div class="timeline-marker"></div>
-              <div class="timeline-time">Afternoon</div>
-              <div class="timeline-title">Midday Exploration</div>
-              <div class="timeline-desc">${escapeHtml(dayData.afternoon || dayData.pm || '')}</div>
-            </div>
-            <div class="timeline-item">
-              <div class="timeline-marker"></div>
-              <div class="timeline-time">Evening</div>
-              <div class="timeline-title">Evening & Dinner</div>
-              <div class="timeline-desc">${escapeHtml(dayData.evening || dayData.night || '')}</div>
-            </div>
           </div>
-        `;
-        itineraryContainer.appendChild(dayEl);
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-time">Afternoon</div>
+            <div class="timeline-title">Midday Exploration</div>
+              <div class="timeline-desc">${escapeHtml(dayData.afternoon || dayData.pm || '')}</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-time">Evening</div>
+            <div class="timeline-title">Evening & Dinner</div>
+              <div class="timeline-desc">${escapeHtml(dayData.evening || dayData.night || '')}</div>
+          </div>
+        </div>
+      `;
+      itineraryContainer.appendChild(dayEl);
       });
       return;
     }
@@ -357,19 +375,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     itineraryContainer.innerHTML = `
       <div class="itinerary-day">
-        <div class="day-header">
+          <div class="day-header">
           <span class="badge badge-primary">Plan</span>
           <h3>TravelMind Plan</h3>
-        </div>
-        <div class="day-timeline">
-          <div class="timeline-item">
-            <div class="timeline-marker"></div>
-            <div class="timeline-desc" style="white-space: pre-wrap;">${escapeHtml(String(fallbackText))}</div>
           </div>
-        </div>
-      </div>
-    `;
-  }
+          <div class="day-timeline">
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+            <div class="timeline-desc" style="white-space: pre-wrap;">${escapeHtml(String(fallbackText))}</div>
+            </div>
+            </div>
+          </div>
+        `;
+    }
 
   function renderBudget(data, fallbackBudget) {
     budgetListContainer.innerHTML = '';
@@ -382,14 +400,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = document.createElement('div');
         item.className = 'budget-item';
         item.innerHTML = `
-          <div class="budget-label-row">
+        <div class="budget-label-row">
             <span class="budget-cat">${escapeHtml(label)}</span>
             <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
-          </div>
-          <div class="progress-track">
+        </div>
+        <div class="progress-track">
             <div class="progress-bar" data-value="${pct}%"></div>
-          </div>
-        `;
+        </div>
+      `;
         budgetListContainer.appendChild(item);
       });
     } else {
@@ -584,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const n8nResponse = await getTravelPlan(formData);
       setPlannerLoadingState(false);
       showPlannerResults(formData, n8nResponse);
-      showToast("Trip generated successfully via n8n!");
+      showToast(backendConfig?.messages?.success || "Trip generated successfully via n8n!");
     } catch (err) {
       setPlannerLoadingState(false);
       console.error('[n8n] Planner webhook failed:', err);
@@ -700,13 +718,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const navScrollObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
-      const id = entry.target.getAttribute('id');
-      scrollNavLinks.forEach(link => {
-        link.classList.remove('active');
-        if (link.getAttribute('href') === `#${id}`) {
-          link.classList.add('active');
-        }
-      });
+        const id = entry.target.getAttribute('id');
+        scrollNavLinks.forEach(link => {
+          link.classList.remove('active');
+          if (link.getAttribute('href') === `#${id}`) {
+            link.classList.add('active');
+          }
+        });
     });
   }, {
     threshold: 0.2,
