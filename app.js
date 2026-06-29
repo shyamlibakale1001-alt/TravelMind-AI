@@ -13,18 +13,21 @@ async function loadBackendConfig() {
   return backendConfig;
 }
 
-function isLocalViteDev() {
+function shouldUseN8nProxy() {
+  const api = backendConfig.api;
+  const proxyHosts = api.proxyHosts || ['localhost', '127.0.0.1'];
+
   return (
     window.location.protocol.startsWith('http') &&
-    ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    api.proxyPrefix &&
+    proxyHosts.includes(window.location.hostname)
   );
 }
 
-function getN8nWebhookUrl() {
+function getN8nWebhookUrl(webhookPath) {
   const api = backendConfig.api;
-  const webhookPath = api.webhookPath;
 
-  if (isLocalViteDev()) {
+  if (shouldUseN8nProxy()) {
     return `${api.proxyPrefix}${webhookPath}`;
   }
   return `${api.baseUrl}${webhookPath}`;
@@ -42,31 +45,12 @@ function createN8nHeaders(headers) {
   );
 }
 
-async function getTravelPlan(data) {
-  if (!backendConfig) {
-    await loadBackendConfig();
-  }
+function isN8nWebhookMissing(result, response) {
+  const message = String(result?.message || '').toLowerCase();
+  return (response?.status === 404 || Number(result?.code) === 404) && message.includes('webhook');
+}
 
-  const { api, messages } = backendConfig;
-
-  if (window.location.protocol === 'file:') {
-    throw new Error(messages.fileProtocolError);
-  }
-
-  const webhookUrl = getN8nWebhookUrl();
-  const requestBody = {
-    apiKey: api.apiKey,
-    destination: data.destination,
-    budget: data.budget,
-    days: data.days,
-    interests: data.interests,
-    startDate: data.startDate,
-    endDate: data.endDate,
-    travelers: data.travelers,
-    travelStyles: data.travelStyles,
-    preferences: data.preferences
-  };
-
+async function callN8nWebhook(webhookUrl, requestBody, api, messages) {
   let response;
   try {
     console.log('[n8n] request:', webhookUrl, requestBody);
@@ -90,17 +74,67 @@ async function getTravelPlan(data) {
     if (text.toLowerCase().includes('cors')) {
       throw new Error(messages.corsError);
     }
-    throw new Error(`Unexpected response from n8n (${response.status}). Check ngrok and n8n workflow.`);
+    throw new Error(`Unexpected response from n8n (${response.status}). Check that Vite proxies to n8n and the workflow is active.`);
   }
 
   const result = await response.json();
 
   if (!response.ok || Number(result?.code) >= 400) {
-    throw new Error(formatN8nError(result, response.status));
+    const error = new Error(formatN8nError(result, response.status));
+    error.result = result;
+    error.response = response;
+    throw error;
   }
 
-  console.log('[n8n] response:', result);
   return result;
+}
+
+async function getTravelPlan(data) {
+  if (!backendConfig) {
+    await loadBackendConfig();
+  }
+
+  const { api, messages } = backendConfig;
+
+  if (window.location.protocol === 'file:') {
+    throw new Error(messages.fileProtocolError);
+  }
+
+  const requestBody = {
+    apiKey: api.apiKey,
+    destination: data.destination,
+    budget: data.budget,
+    days: data.days,
+    interests: data.interests,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    travelers: data.travelers,
+    travelStyles: data.travelStyles,
+    preferences: data.preferences
+  };
+
+  const webhookUrl = getN8nWebhookUrl(api.webhookPath);
+  try {
+    const result = await callN8nWebhook(webhookUrl, requestBody, api, messages);
+    console.log('[n8n] response:', result);
+    return result;
+  } catch (err) {
+    if (api.testWebhookPath && isN8nWebhookMissing(err.result, err.response)) {
+      const testWebhookUrl = getN8nWebhookUrl(api.testWebhookPath);
+      console.warn('[n8n] production webhook missing, trying test webhook:', testWebhookUrl);
+      try {
+        const testResult = await callN8nWebhook(testWebhookUrl, requestBody, api, messages);
+        console.log('[n8n] test response:', testResult);
+        return testResult;
+      } catch (testErr) {
+        if (isN8nWebhookMissing(testErr.result, testErr.response)) {
+          throw new Error('n8n is reachable, but the TravelMind webhook is not registered. Activate the workflow in n8n, or click "Execute workflow" before testing.');
+        }
+        throw testErr;
+      }
+    }
+    throw err;
+  }
 }
 
 function normalizeN8nResponse(raw) {

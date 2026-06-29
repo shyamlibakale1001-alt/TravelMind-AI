@@ -8,7 +8,7 @@ export default defineConfig({
     allowedHosts: ['barista-sliced-outwit.ngrok-free.dev'],
     proxy: {
       [backend.api.proxyPrefix]: {
-        target: backend.api.baseUrl,
+        target: backend.api.localBaseUrl || backend.api.baseUrl,
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(new RegExp(`^${backend.api.proxyPrefix}`), ''),

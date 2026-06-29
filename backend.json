@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "api": {
     "baseUrl": "https://barista-sliced-outwit.ngrok-free.dev",
+    "localBaseUrl": "http://127.0.0.1:5678",
     "webhookPath": "/webhook/travelmind/plan",
     "testWebhookPath": "/webhook-test/travelmind/plan",
     "apiKey": "travelmind_secure_001",
@@ -11,7 +12,8 @@
       "Content-Type": "application/json",
       "ngrok-skip-browser-warning": "true"
     },
-    "proxyPrefix": "/api/n8n"
+    "proxyPrefix": "/api/n8n",
+    "proxyHosts": ["localhost", "127.0.0.1", "barista-sliced-outwit.ngrok-free.dev"]
   },
   "endpoints": {
     "generateTrip": {
