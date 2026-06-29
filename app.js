@@ -2,6 +2,19 @@
  * TravelMind - Frontend Prototype Logic
  */
 
+async function getTravelPlan(data) {
+  const res = await fetch("https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind-plan", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(data)
+  });
+
+  const result = await res.json();
+  return result;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
@@ -39,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearChatBtn = document.getElementById('clear-chat-btn');
   const chatSendBtn = document.getElementById('chat-send-btn');
 
-  const N8N_WEBHOOK_URL = 'https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind-plan';
   const PROTOTYPE_MSG = "Frontend prototype only. Backend integration coming soon.";
   const selectedStyles = new Set();
 
@@ -180,33 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function sendPlannerToN8n(payload) {
-    const response = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    let data = null;
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-      if (text) data = { message: text };
-    }
-
-    if (!response.ok) {
-      const errMsg = data?.message || data?.error || `Webhook returned ${response.status}`;
-      throw new Error(errMsg);
-    }
-
-    return data;
-  }
-
   function showPlannerResults(destVal, startVal, endVal, travelersVal, n8nResponse) {
     const styleStr = selectedStyles.size > 0 ? Array.from(selectedStyles).join(', ') : "General";
     resultsBadge.textContent = 'n8n Connected';
@@ -251,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setPlannerLoadingState(true, "Sending your trip to n8n...");
 
     try {
-      const n8nResponse = await sendPlannerToN8n(payload);
+      const n8nResponse = await getTravelPlan(payload);
       setPlannerLoadingState(false);
       showPlannerResults(destVal, startVal, endVal, travelersVal, n8nResponse);
       console.log('[n8n] Planner webhook success:', n8nResponse);
