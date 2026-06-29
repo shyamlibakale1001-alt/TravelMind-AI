@@ -3,16 +3,45 @@
  */
 
 async function getTravelPlan(data) {
-  const res = await fetch("https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind-plan", {
+  const response = await fetch("https://barista-sliced-outwit.ngrok-free.dev/webhook/travelmind/plan", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true"
     },
-    body: JSON.stringify(data)
+    body: JSON.stringify({
+      apiKey: "travelmind_secure_001",
+      destination: data.destination,
+      budget: data.budget,
+      days: data.days,
+      interests: data.interests,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      travelers: data.travelers,
+      travelStyles: data.travelStyles,
+      preferences: data.preferences
+    })
   });
 
-  const result = await res.json();
+  if (!response.ok) {
+    throw new Error(`n8n webhook failed (${response.status})`);
+  }
+
+  const result = await response.json();
+  console.log("[n8n] response:", result);
   return result;
+}
+
+function normalizeN8nResponse(raw) {
+  if (Array.isArray(raw) && raw[0]?.json) return raw[0].json;
+  if (Array.isArray(raw) && raw[0]) return raw[0];
+  return raw || {};
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -44,6 +73,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultsTitle = document.getElementById('results-title');
   const resultsSubtitle = document.getElementById('results-subtitle');
   const resultsBadge = document.getElementById('results-badge');
+  const itineraryContainer = document.getElementById('itinerary-timeline-container');
+  const budgetListContainer = document.getElementById('budget-list-container');
+  const budgetTotalCost = document.getElementById('budget-total-cost');
+  const weatherListContainer = document.getElementById('weather-list-container');
+  const packingListContainer = document.getElementById('packing-list-container');
+  const attractionsGrid = document.getElementById('attractions-grid');
+  const hotelsGrid = document.getElementById('hotels-grid');
+  const foodsGridContainer = document.getElementById('foods-grid-container');
+  const transportListContainer = document.getElementById('transport-list-container');
+  const safetyListContainer = document.getElementById('safety-list-container');
 
   const chatMessagesContainer = document.getElementById('chat-messages-container');
   const chatSuggestionsContainer = document.getElementById('chat-suggestions-container');
@@ -192,20 +231,264 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function showPlannerResults(destVal, startVal, endVal, travelersVal, n8nResponse) {
-    const styleStr = selectedStyles.size > 0 ? Array.from(selectedStyles).join(', ') : "General";
-    resultsBadge.textContent = 'n8n Connected';
-    resultsTitle.textContent = n8nResponse?.title || `Trip Preview for ${destVal}`;
-    resultsSubtitle.textContent = n8nResponse?.subtitle
-      || `Dates: ${startVal} to ${endVal} • ${travelersVal} Traveler${travelersVal > 1 ? 's' : ''} • Styles: ${styleStr}`;
+  function showPlannerResults(formData, n8nResponse) {
+    const data = normalizeN8nResponse(n8nResponse);
+    const styleStr = formData.travelStyles.length > 0 ? formData.travelStyles.join(', ') : "General";
+
+    resultsBadge.textContent = data.badge || 'Itinerary Ready';
+    resultsTitle.textContent = data.title || `Your Custom Trip to ${formData.destination}`;
+    resultsSubtitle.textContent = data.subtitle
+      || `${formData.days} Days • ${formData.travelers} Traveler${formData.travelers > 1 ? 's' : ''} • Styles: ${styleStr}`;
+
+    renderItinerary(data, formData);
+    renderBudget(data, formData.budget);
+    renderWeather(data);
+    renderPacking(data);
+    renderAttractions(data);
+    renderHotels(data);
+    renderFoods(data);
+    renderTransport(data);
+    renderSafety(data);
 
     resultsSection.classList.add('visible');
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons();
+    }
   }
 
-  plannerForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  function renderItinerary(data, formData) {
+    itineraryContainer.innerHTML = '';
+    const days = data.itinerary || data.itineraryDays || data.days_plan;
 
+    if (Array.isArray(days) && days.length > 0) {
+      days.forEach((dayData, index) => {
+        const dayEl = document.createElement('div');
+        dayEl.className = 'itinerary-day';
+        dayEl.innerHTML = `
+          <div class="day-header">
+            <span class="badge badge-primary">Day ${dayData.day || index + 1}</span>
+            <h3>Daily Exploration</h3>
+          </div>
+          <div class="day-timeline">
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-time">Morning</div>
+              <div class="timeline-title">Morning Adventure</div>
+              <div class="timeline-desc">${escapeHtml(dayData.morning || dayData.am || '')}</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-time">Afternoon</div>
+              <div class="timeline-title">Midday Exploration</div>
+              <div class="timeline-desc">${escapeHtml(dayData.afternoon || dayData.pm || '')}</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-time">Evening</div>
+              <div class="timeline-title">Evening & Dinner</div>
+              <div class="timeline-desc">${escapeHtml(dayData.evening || dayData.night || '')}</div>
+            </div>
+          </div>
+        `;
+        itineraryContainer.appendChild(dayEl);
+      });
+      return;
+    }
+
+    const planText = data.plan || data.message || data.output || data.itineraryText;
+    const fallbackText = planText
+      || `Your ${formData.days}-day trip to ${formData.destination} was sent to n8n. Check the browser console for the full response while your workflow finishes processing.`;
+
+    itineraryContainer.innerHTML = `
+      <div class="itinerary-day">
+        <div class="day-header">
+          <span class="badge badge-primary">Plan</span>
+          <h3>TravelMind Plan</h3>
+        </div>
+        <div class="day-timeline">
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div class="timeline-desc" style="white-space: pre-wrap;">${escapeHtml(String(fallbackText))}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBudget(data, fallbackBudget) {
+    budgetListContainer.innerHTML = '';
+    const breakdown = data.budget || data.budgetBreakdown;
+
+    if (breakdown && typeof breakdown === 'object') {
+      Object.entries(breakdown).forEach(([label, value]) => {
+        const amount = typeof value === 'number' ? value : parseInt(value, 10);
+        const pct = fallbackBudget ? Math.round((amount / fallbackBudget) * 100) : 0;
+        const item = document.createElement('div');
+        item.className = 'budget-item';
+        item.innerHTML = `
+          <div class="budget-label-row">
+            <span class="budget-cat">${escapeHtml(label)}</span>
+            <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar" data-value="${pct}%"></div>
+          </div>
+        `;
+        budgetListContainer.appendChild(item);
+      });
+    } else {
+      budgetListContainer.innerHTML = `<p class="card-desc">Budget breakdown will appear here once n8n returns structured data.</p>`;
+    }
+
+    const total = data.totalBudget || data.budgetTotal || fallbackBudget;
+    budgetTotalCost.textContent = `₹${Number(total).toLocaleString('en-IN')}`;
+
+    setTimeout(() => {
+      document.querySelectorAll('.progress-bar').forEach(bar => {
+        bar.style.width = bar.getAttribute('data-value');
+      });
+    }, 300);
+  }
+
+  function renderWeather(data) {
+    weatherListContainer.innerHTML = '';
+    const weather = data.weather;
+    if (!Array.isArray(weather) || weather.length === 0) {
+      weatherListContainer.innerHTML = `<p class="card-desc">Weather details will appear here from n8n.</p>`;
+      return;
+    }
+    weather.forEach(w => {
+      const card = document.createElement('div');
+      card.className = 'weather-day-card';
+      card.innerHTML = `
+        <div class="weather-name">${escapeHtml(w.day || 'Day')}</div>
+        <div class="weather-icon"><i data-lucide="${w.icon || 'cloud-sun'}"></i></div>
+        <div class="weather-temp">${escapeHtml(w.temp || '')}</div>
+        <div class="weather-desc">${escapeHtml(w.cond || w.condition || '')}</div>
+      `;
+      weatherListContainer.appendChild(card);
+    });
+  }
+
+  function renderPacking(data) {
+    packingListContainer.innerHTML = '';
+    const packing = data.packing || data.packingList;
+    if (!Array.isArray(packing) || packing.length === 0) {
+      packingListContainer.innerHTML = `<p class="card-desc">Packing checklist will appear here from n8n.</p>`;
+      return;
+    }
+    packing.forEach((item, idx) => {
+      const label = document.createElement('label');
+      label.className = 'packing-item';
+      label.innerHTML = `
+        <input type="checkbox" id="pack-chk-${idx}">
+        <span>${escapeHtml(typeof item === 'string' ? item : item.name || '')}</span>
+      `;
+      packingListContainer.appendChild(label);
+    });
+  }
+
+  function renderAttractions(data) {
+    attractionsGrid.innerHTML = '';
+    const attractions = data.attractions;
+    if (!Array.isArray(attractions) || attractions.length === 0) {
+      attractionsGrid.innerHTML = `<p class="card-desc">Attraction recommendations will appear here from n8n.</p>`;
+      return;
+    }
+    attractions.forEach(attr => {
+      const card = document.createElement('div');
+      card.className = 'glass-panel attraction-card';
+      card.innerHTML = `
+        <div class="card-content">
+          <h4 class="card-title">${escapeHtml(attr.name || 'Attraction')}</h4>
+          <p class="card-desc">${escapeHtml(attr.desc || attr.description || '')}</p>
+        </div>
+      `;
+      attractionsGrid.appendChild(card);
+    });
+  }
+
+  function renderHotels(data) {
+    hotelsGrid.innerHTML = '';
+    const hotels = data.hotels;
+    if (!Array.isArray(hotels) || hotels.length === 0) {
+      hotelsGrid.innerHTML = `<p class="card-desc">Hotel recommendations will appear here from n8n.</p>`;
+      return;
+    }
+    hotels.forEach(hotel => {
+      const card = document.createElement('div');
+      card.className = 'glass-panel hotel-card';
+      card.innerHTML = `
+        <div class="card-content">
+          <h4 class="card-title">${escapeHtml(hotel.name || 'Hotel')}</h4>
+          <p class="card-desc">${escapeHtml(hotel.price || hotel.desc || '')}</p>
+        </div>
+      `;
+      hotelsGrid.appendChild(card);
+    });
+  }
+
+  function renderFoods(data) {
+    foodsGridContainer.innerHTML = '';
+    const foods = data.foods;
+    if (!Array.isArray(foods) || foods.length === 0) {
+      foodsGridContainer.innerHTML = `<p class="card-desc">Food recommendations will appear here from n8n.</p>`;
+      return;
+    }
+    foods.forEach(food => {
+      const card = document.createElement('div');
+      card.className = 'glass-panel food-item-card';
+      card.innerHTML = `
+        <span class="food-emoji">${food.emoji || '🍽️'}</span>
+        <h4 class="food-title">${escapeHtml(food.name || 'Local Dish')}</h4>
+        <p class="food-desc">${escapeHtml(food.desc || food.description || '')}</p>
+      `;
+      foodsGridContainer.appendChild(card);
+    });
+  }
+
+  function renderTransport(data) {
+    transportListContainer.innerHTML = '';
+    const transport = data.transport;
+    if (!Array.isArray(transport) || transport.length === 0) {
+      transportListContainer.innerHTML = `<p class="card-desc">Transport guide will appear here from n8n.</p>`;
+      return;
+    }
+    transport.forEach(t => {
+      const item = document.createElement('div');
+      item.className = 'transport-item';
+      item.innerHTML = `
+        <div class="transport-label"><span>${escapeHtml(t.type || t.name || 'Transport')}</span></div>
+        <span class="badge badge-primary">${escapeHtml(t.efficiency || t.note || 'Recommended')}</span>
+      `;
+      transportListContainer.appendChild(item);
+    });
+  }
+
+  function renderSafety(data) {
+    safetyListContainer.innerHTML = '';
+    const safety = data.safety || data.safetyTips;
+    if (!Array.isArray(safety) || safety.length === 0) {
+      safetyListContainer.innerHTML = `<p class="card-desc">Safety tips will appear here from n8n.</p>`;
+      return;
+    }
+    safety.forEach(tip => {
+      const item = document.createElement('div');
+      item.className = 'safety-item';
+      item.innerHTML = `
+        <span class="safety-icon">${tip.icon || '💡'}</span>
+        <div class="safety-item-content">
+          <h4 class="safety-item-title">${escapeHtml(tip.title || 'Tip')}</h4>
+          <p class="safety-item-desc">${escapeHtml(tip.desc || tip.description || '')}</p>
+        </div>
+      `;
+      safetyListContainer.appendChild(item);
+    });
+  }
+
+  async function handleGenerateTrip() {
     const destVal = destinationInput.value.trim();
     const startVal = startDateInput.value;
     const endVal = endDateInput.value;
@@ -223,29 +506,41 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const payload = {
+    const date1 = new Date(startVal);
+    const date2 = new Date(endVal);
+    const diffDays = Math.ceil(Math.abs(date2 - date1) / (1000 * 60 * 60 * 24)) + 1;
+    const travelStyles = Array.from(selectedStyles);
+    const interests = [...travelStyles, preferencesVal].filter(Boolean).join(', ');
+
+    const formData = {
       destination: destVal,
       startDate: startVal,
       endDate: endVal,
       budget: budgetVal,
+      days: diffDays,
       travelers: travelersVal,
-      travelStyles: Array.from(selectedStyles),
+      travelStyles,
+      interests: interests || 'general',
       preferences: preferencesVal
     };
 
-    setPlannerLoadingState(true, "Sending your trip to n8n...");
+    setPlannerLoadingState(true, "Generating your trip with n8n...");
 
     try {
-      const n8nResponse = await getTravelPlan(payload);
+      const n8nResponse = await getTravelPlan(formData);
       setPlannerLoadingState(false);
-      showPlannerResults(destVal, startVal, endVal, travelersVal, n8nResponse);
-      console.log('[n8n] Planner webhook success:', n8nResponse);
-      showToast("Trip request sent to n8n successfully!");
+      showPlannerResults(formData, n8nResponse);
+      showToast("Trip generated successfully via n8n!");
     } catch (err) {
       setPlannerLoadingState(false);
       console.error('[n8n] Planner webhook failed:', err);
       showToast(`Could not reach n8n: ${err.message}`);
     }
+  }
+
+  plannerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleGenerateTrip();
   });
 
   clearChatBtn.addEventListener('click', () => {
