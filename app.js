@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const travelersPreset = document.getElementById('travelers-preset');
   const travelersCount = document.getElementById('travelers-count');
   const styleChipsContainer = document.getElementById('style-chips-container');
+  const preferencesInput = document.getElementById('preferences-input');
   const generateBtn = document.getElementById('generate-btn');
   const loaderOverlay = document.getElementById('planner-loader');
   const loaderMsg = document.getElementById('loader-msg');
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearChatBtn = document.getElementById('clear-chat-btn');
   const chatSendBtn = document.getElementById('chat-send-btn');
 
+  const N8N_WEBHOOK_URL = 'https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travel%20planner';
   const PROTOTYPE_MSG = "Frontend prototype only. Backend integration coming soon.";
   const selectedStyles = new Set();
 
@@ -168,17 +170,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function setPlannerLoadingState(isLoading) {
+  function setPlannerLoadingState(isLoading, message) {
     generateBtn.disabled = isLoading;
     plannerForm.closest('.planner-card').style.display = isLoading ? 'none' : 'block';
     loaderOverlay.style.display = isLoading ? 'flex' : 'none';
-    loaderMsg.textContent = isLoading ? "Preparing frontend preview..." : "Finding the best attractions...";
+    loaderMsg.textContent = message || (isLoading ? "Sending your trip to n8n..." : "Finding the best attractions...");
     if (isLoading) {
       loaderOverlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 
-  plannerForm.addEventListener('submit', (e) => {
+  async function sendPlannerToN8n(payload) {
+    const response = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    let data = null;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      if (text) data = { message: text };
+    }
+
+    if (!response.ok) {
+      const errMsg = data?.message || data?.error || `Webhook returned ${response.status}`;
+      throw new Error(errMsg);
+    }
+
+    return data;
+  }
+
+  function showPlannerResults(destVal, startVal, endVal, travelersVal, n8nResponse) {
+    const styleStr = selectedStyles.size > 0 ? Array.from(selectedStyles).join(', ') : "General";
+    resultsBadge.textContent = 'n8n Connected';
+    resultsTitle.textContent = n8nResponse?.title || `Trip Preview for ${destVal}`;
+    resultsSubtitle.textContent = n8nResponse?.subtitle
+      || `Dates: ${startVal} to ${endVal} • ${travelersVal} Traveler${travelersVal > 1 ? 's' : ''} • Styles: ${styleStr}`;
+
+    resultsSection.classList.add('visible');
+    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  plannerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const destVal = destinationInput.value.trim();
@@ -186,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const endVal = endDateInput.value;
     const budgetVal = parseInt(budgetInput.value, 10);
     const travelersVal = parseInt(travelersCount.value, 10);
+    const preferencesVal = preferencesInput.value.trim();
 
     if (!destVal || !startVal || !endVal || Number.isNaN(budgetVal) || Number.isNaN(travelersVal)) {
       alert("Please fill in all the planner options to continue.");
@@ -197,20 +238,29 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    setPlannerLoadingState(true);
-    setTimeout(() => {
+    const payload = {
+      destination: destVal,
+      startDate: startVal,
+      endDate: endVal,
+      budget: budgetVal,
+      travelers: travelersVal,
+      travelStyles: Array.from(selectedStyles),
+      preferences: preferencesVal
+    };
+
+    setPlannerLoadingState(true, "Sending your trip to n8n...");
+
+    try {
+      const n8nResponse = await sendPlannerToN8n(payload);
       setPlannerLoadingState(false);
-      resultsSection.classList.add('visible');
-      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-      const styleStr = selectedStyles.size > 0 ? Array.from(selectedStyles).join(', ') : "General";
-      resultsBadge.textContent = 'Prototype Preview';
-      resultsTitle.textContent = `Trip Preview for ${destVal}`;
-      resultsSubtitle.textContent = `Dates: ${startVal} to ${endVal} • ${travelersVal} Traveler${travelersVal > 1 ? 's' : ''} • Styles: ${styleStr}`;
-
-      console.log('[frontend-prototype] Planner submit processed locally only.');
-      showToast(PROTOTYPE_MSG);
-    }, 1000);
+      showPlannerResults(destVal, startVal, endVal, travelersVal, n8nResponse);
+      console.log('[n8n] Planner webhook success:', n8nResponse);
+      showToast("Trip request sent to n8n successfully!");
+    } catch (err) {
+      setPlannerLoadingState(false);
+      console.error('[n8n] Planner webhook failed:', err);
+      showToast(`Could not reach n8n: ${err.message}`);
+    }
   });
 
   clearChatBtn.addEventListener('click', () => {
