@@ -1,0 +1,195 @@
+{
+  "name": "TravelMind AI Planner",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "travelmind/plan",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "TravelMindWebhook",
+      "name": "TravelMind Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [120, 300],
+      "webhookId": "travelmind-plan"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\n\nreturn [{\n  json: {\n    authorized: body.apiKey === 'travelmind_secure_001',\n    destination: body.destination || 'your destination',\n    days: Number(body.days || 3),\n    budgetAmount: Number(body.budget || 50000),\n    travelers: Number(body.travelers || 1),\n    interests: body.interests || 'general sightseeing',\n    preferences: body.preferences || 'balanced pace',\n    startDate: body.startDate || '',\n    endDate: body.endDate || '',\n    travelStyles: body.travelStyles || []\n  }\n}];"
+      },
+      "id": "ValidateRequest",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [360, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "AuthorizedCondition",
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "IsAuthorized",
+      "name": "Is Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\ndata.itinerary = Array.from({ length: data.days }, (_, i) => ({\n  day: i + 1,\n  morning: `Explore a signature area of ${data.destination} with a focus on ${data.interests}.`,\n  afternoon: `Visit a popular attraction, market, or cultural stop in ${data.destination}.`,\n  evening: `Enjoy dinner and a relaxed evening matched to: ${data.preferences}.`\n}));\n\nreturn [{ json: data }];"
+      },
+      "id": "BuildItinerary",
+      "name": "Build Itinerary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst budget = data.budgetAmount;\n\ndata.totalBudget = budget;\ndata.budget = {\n  stays: Math.round(budget * 0.35),\n  food: Math.round(budget * 0.2),\n  transport: Math.round(budget * 0.2),\n  activities: Math.round(budget * 0.2),\n  buffer: Math.round(budget * 0.05)\n};\n\nreturn [{ json: data }];"
+      },
+      "id": "BuildBudget",
+      "name": "Build Budget",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\ndata.weather = [\n  {\n    day: 'Trip period',\n    icon: 'cloud-sun',\n    temp: 'Check live forecast',\n    condition: 'Plan for seasonal weather'\n  }\n];\n\ndata.packing = [\n  'Comfortable shoes',\n  'Travel documents',\n  'Power bank',\n  'Weather-appropriate clothing',\n  'Reusable water bottle'\n];\n\ndata.attractions = [\n  {\n    name: `${data.destination} highlights`,\n    desc: `Top landmarks and local experiences based on ${data.interests}.`\n  },\n  {\n    name: 'Local culture stop',\n    desc: 'A museum, heritage area, market, or neighborhood walk.'\n  }\n];\n\ndata.hotels = [\n  {\n    name: 'Central stay option',\n    price: 'Choose a well-reviewed stay near transit and attractions.'\n  },\n  {\n    name: 'Budget-friendly stay',\n    price: 'Compare ratings, commute time, and cancellation policy.'\n  }\n];\n\ndata.foods = [\n  {\n    emoji: '🍽️',\n    name: 'Local specialty',\n    desc: `Try one iconic dish from ${data.destination}.`\n  },\n  {\n    emoji: '☕',\n    name: 'Cafe or street food stop',\n    desc: 'Add a relaxed food break between sightseeing.'\n  }\n];\n\ndata.transport = [\n  {\n    type: 'Local transit',\n    efficiency: 'Best for city travel'\n  },\n  {\n    type: 'Taxi or rideshare',\n    efficiency: 'Best for late evenings'\n  }\n];\n\ndata.safetyTips = [\n  {\n    icon: '💡',\n    title: 'Keep essentials secure',\n    desc: 'Carry copies of documents and avoid displaying valuables.'\n  },\n  {\n    icon: '📍',\n    title: 'Share your route',\n    desc: 'Keep someone informed about hotel and day plans.'\n  }\n];\n\nreturn [{ json: data }];"
+      },
+      "id": "AddRecommendations",
+      "name": "Add Recommendations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "RespondToFrontend",
+      "name": "Respond to Frontend",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1560, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"message\": \"Unauthorized\", \"hint\": \"Invalid API key.\" }",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "RespondUnauthorized",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [840, 420]
+    }
+  ],
+  "connections": {
+    "TravelMind Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Is Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Build Itinerary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Itinerary": {
+      "main": [
+        [
+          {
+            "node": "Build Budget",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Budget": {
+      "main": [
+        [
+          {
+            "node": "Add Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Respond to Frontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

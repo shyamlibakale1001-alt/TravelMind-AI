@@ -36,6 +36,12 @@ function formatN8nError(result, status) {
   return `${message}${hint}`;
 }
 
+function createN8nHeaders(headers) {
+  return Object.fromEntries(
+    Object.entries(headers || {}).filter(([, value]) => value !== undefined && value !== null)
+  );
+}
+
 async function getTravelPlan(data) {
   if (!backendConfig) {
     await loadBackendConfig();
@@ -45,10 +51,6 @@ async function getTravelPlan(data) {
 
   if (window.location.protocol === 'file:') {
     throw new Error(messages.fileProtocolError);
-  }
-
-  if (!isLocalViteDev()) {
-    throw new Error(messages.corsError);
   }
 
   const webhookUrl = getN8nWebhookUrl();
@@ -67,9 +69,10 @@ async function getTravelPlan(data) {
 
   let response;
   try {
+    console.log('[n8n] request:', webhookUrl, requestBody);
     response = await fetch(webhookUrl, {
       method: api.method,
-      headers: api.headers,
+      headers: createN8nHeaders(api.headers),
       body: JSON.stringify(requestBody)
     });
   } catch (networkErr) {
@@ -84,12 +87,15 @@ async function getTravelPlan(data) {
     if (text.includes('ERR_NGROK') || text.toLowerCase().includes('offline')) {
       throw new Error(messages.ngrokOffline);
     }
+    if (text.toLowerCase().includes('cors')) {
+      throw new Error(messages.corsError);
+    }
     throw new Error(`Unexpected response from n8n (${response.status}). Check ngrok and n8n workflow.`);
   }
 
   const result = await response.json();
 
-  if (!response.ok) {
+  if (!response.ok || Number(result?.code) >= 400) {
     throw new Error(formatN8nError(result, response.status));
   }
 
