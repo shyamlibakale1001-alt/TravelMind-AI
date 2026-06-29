@@ -5,6 +5,7 @@ const backend = JSON.parse(readFileSync('./backend.json', 'utf-8'));
 
 export default defineConfig({
   server: {
+    allowedHosts: ['barista-sliced-outwit.ngrok-free.dev'],
     proxy: {
       [backend.api.proxyPrefix]: {
         target: backend.api.baseUrl,
