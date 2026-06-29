@@ -2,33 +2,87 @@
  * TravelMind - Frontend Prototype Logic
  */
 
-async function getTravelPlan(data) {
-  const response = await fetch("https://barista-sliced-outwit.ngrok-free.dev/webhook/travelmind/plan", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true"
-    },
-    body: JSON.stringify({
-      apiKey: "travelmind_secure_001",
-      destination: data.destination,
-      budget: data.budget,
-      days: data.days,
-      interests: data.interests,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      travelers: data.travelers,
-      travelStyles: data.travelStyles,
-      preferences: data.preferences
-    })
-  });
+const N8N_NGROK_HOST = 'https://barista-sliced-outwit.ngrok-free.dev';
+const N8N_WEBHOOK_PATH = '/webhook/travelmind/plan';
 
-  if (!response.ok) {
-    throw new Error(`n8n webhook failed (${response.status})`);
+function isLocalViteDev() {
+  return (
+    window.location.protocol.startsWith('http') &&
+    ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  );
+}
+
+function getN8nWebhookUrl() {
+  // Browser requests to ngrok are blocked by CORS — route through Vite proxy in local dev
+  if (isLocalViteDev()) {
+    return `/api/n8n${N8N_WEBHOOK_PATH}`;
+  }
+  return `${N8N_NGROK_HOST}${N8N_WEBHOOK_PATH}`;
+}
+
+function formatN8nError(result, status) {
+  const message = result?.message || result?.error || `n8n webhook failed (${status})`;
+  const hint = result?.hint ? ` ${result.hint}` : '';
+  return `${message}${hint}`;
+}
+
+async function getTravelPlan(data) {
+  if (window.location.protocol === 'file:') {
+    throw new Error('Open the site with "npm run dev" at http://localhost:5173 (do not open index.html directly).');
+  }
+
+  if (!isLocalViteDev()) {
+    throw new Error('Run "npm run dev" and open http://localhost:5173 so requests can reach n8n without CORS errors.');
+  }
+
+  const webhookUrl = getN8nWebhookUrl();
+  const requestBody = {
+    apiKey: 'travelmind_secure_001',
+    destination: data.destination,
+    budget: data.budget,
+    days: data.days,
+    interests: data.interests,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    travelers: data.travelers,
+    travelStyles: data.travelStyles,
+    preferences: data.preferences
+  };
+
+  let response;
+  try {
+    response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify(requestBody)
+    });
+  } catch (networkErr) {
+    throw new Error(
+      `Network error (${networkErr.message}). Use "npm run dev", keep ngrok running, and activate your n8n workflow.`
+    );
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
+  if (!isJson) {
+    const text = await response.text();
+    if (text.includes('ERR_NGROK') || text.toLowerCase().includes('offline')) {
+      throw new Error('ngrok tunnel is offline. Start ngrok pointing to n8n, then try again.');
+    }
+    throw new Error(`Unexpected response from n8n (${response.status}). Check ngrok and n8n workflow.`);
   }
 
   const result = await response.json();
-  console.log("[n8n] response:", result);
+
+  if (!response.ok) {
+    throw new Error(formatN8nError(result, response.status));
+  }
+
+  console.log('[n8n] response:', result);
   return result;
 }
 
@@ -534,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       setPlannerLoadingState(false);
       console.error('[n8n] Planner webhook failed:', err);
-      showToast(`Could not reach n8n: ${err.message}`);
+      showToast(err.message);
     }
   }
 

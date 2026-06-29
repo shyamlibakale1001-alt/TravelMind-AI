@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "TravelMind AI - Premium AI Travel Planner website",
   "scripts": {
-    "dev": "vite"
+    "dev": "vite",
+    "start": "vite"
   },
   "devDependencies": {
     "vite": "^5.3.1"
