@@ -2,102 +2,7 @@
  * TravelMind - Frontend Prototype Logic
  */
 
-function buildLocalTravelPlan(data) {
-  const destination = data.destination;
-  const interests = data.interests || 'sightseeing';
-  const preferences = data.preferences || 'balanced pace';
-  const budget = Number(data.budget || 0);
-
-  const itinerary = Array.from({ length: data.days }, (_, index) => ({
-    day: index + 1,
-    morning: `Start with a relaxed visit to a signature area of ${destination}, focused on ${interests}.`,
-    afternoon: `Explore a landmark, market, museum, or scenic neighborhood in ${destination}.`,
-    evening: `Wind down with dinner and an easy local experience shaped around ${preferences}.`
-  }));
-
-  return {
-    badge: 'Itinerary Ready',
-    title: `Your Custom Trip to ${destination}`,
-    totalBudget: budget,
-    itinerary,
-    budget: {
-      stays: Math.round(budget * 0.35),
-      food: Math.round(budget * 0.2),
-      transport: Math.round(budget * 0.2),
-      activities: Math.round(budget * 0.2),
-      buffer: Math.round(budget * 0.05)
-    },
-    weather: [
-      {
-        day: 'Trip period',
-        icon: 'cloud-sun',
-        temp: 'Check forecast',
-        condition: 'Pack for the local season'
-      }
-    ],
-    packing: [
-      'Comfortable shoes',
-      'Travel documents',
-      'Power bank',
-      'Weather-appropriate clothing',
-      'Reusable water bottle'
-    ],
-    attractions: [
-      {
-        name: `${destination} highlights`,
-        desc: `A flexible mix of iconic sights and local finds based on ${interests}.`
-      },
-      {
-        name: 'Local culture stop',
-        desc: 'Add a museum, historic district, market, or neighborhood walk.'
-      }
-    ],
-    hotels: [
-      {
-        name: 'Central stay option',
-        price: 'Prioritize transit access, reviews, and flexible cancellation.'
-      },
-      {
-        name: 'Budget-friendly stay',
-        price: 'Compare commute time against nightly price before booking.'
-      }
-    ],
-    foods: [
-      {
-        emoji: '🍽️',
-        name: 'Local specialty',
-        desc: `Try one well-known dish or dining experience from ${destination}.`
-      },
-      {
-        emoji: '☕',
-        name: 'Cafe or street food stop',
-        desc: 'Use this as a relaxed break between sightseeing blocks.'
-      }
-    ],
-    transport: [
-      {
-        type: 'Local transit',
-        efficiency: 'Best for regular city travel'
-      },
-      {
-        type: 'Taxi or rideshare',
-        efficiency: 'Best for late evenings or luggage'
-      }
-    ],
-    safetyTips: [
-      {
-        icon: '💡',
-        title: 'Keep essentials secure',
-        desc: 'Carry document copies and keep valuables low-profile.'
-      },
-      {
-        icon: '📍',
-        title: 'Share your route',
-        desc: 'Keep someone informed about your stay and day plans.'
-      }
-    ]
-  };
-}
+const WEBHOOK_URL = "https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind/plan";
 
 function normalizeN8nResponse(raw) {
   if (Array.isArray(raw) && raw[0]?.json) return raw[0].json;
@@ -594,14 +499,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     setPlannerLoadingState(true, "Generating your trip...");
 
     try {
-      const travelPlan = buildLocalTravelPlan(formData);
+      const response = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}: ${response.statusText}`);
+      }
+
+      const rawData = await response.json();
+      const travelPlan = normalizeN8nResponse(rawData);
+
       setPlannerLoadingState(false);
       showPlannerResults(formData, travelPlan);
       showToast("Trip generated successfully!");
     } catch (err) {
       setPlannerLoadingState(false);
       console.error('[planner] Trip generation failed:', err);
-      showToast(err.message);
+      showToast(`Network/API error: ${err.message}`);
     }
   }
 
