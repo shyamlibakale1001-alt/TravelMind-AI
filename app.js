@@ -5,24 +5,43 @@
 const WEBHOOK_URL = "https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind/plan";
 
 function normalizeN8nResponse(raw) {
+  console.log('[normalizeN8nResponse] Incoming raw payload:', raw);
   let data = raw;
   if (Array.isArray(raw) && raw[0]?.json) {
+    console.log('[normalizeN8nResponse] Detected raw[0].json array structure.');
     data = raw[0].json;
   } else if (Array.isArray(raw) && raw[0]) {
+    console.log('[normalizeN8nResponse] Detected raw[0] array structure.');
     data = raw[0];
   }
 
-  if (!data) return {};
+  if (!data) {
+    console.warn('[normalizeN8nResponse] Data payload is empty/falsy.');
+    return {};
+  }
+
+  // Unwrap body if wrapped by n8n
+  if (data.body && typeof data.body === 'object') {
+    console.log('[normalizeN8nResponse] Unwrapping data.body wrapper:', data.body);
+    data = data.body;
+  } else if (data.data && typeof data.data === 'object' && !data.itinerary && !data.plan && !data.itineraryDays) {
+    console.log('[normalizeN8nResponse] Unwrapping data.data wrapper:', data.data);
+    data = data.data;
+  }
 
   // Check if response contains a "text" field that has a markdown code block containing JSON
   if (data.text && typeof data.text === 'string') {
     const trimmedText = data.text.trim();
+    console.log('[normalizeN8nResponse] Checking data.text for markdown/JSON payload:', trimmedText.substring(0, 100) + '...');
+    
     // Match standard markdown code block: ```json ... ``` or ``` ... ```
     const match = trimmedText.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
     
     if (match) {
       try {
-        return JSON.parse(match[1].trim());
+        const parsed = JSON.parse(match[1].trim());
+        console.log('[normalizeN8nResponse] Successfully parsed JSON from markdown code block:', parsed);
+        return parsed;
       } catch (err) {
         console.error('[normalizeN8nResponse] Failed to parse JSON from markdown code block:', err);
         throw new Error(`Failed to parse travel plan: ${err.message}`);
@@ -32,7 +51,9 @@ function normalizeN8nResponse(raw) {
     // Fallback: If it's a JSON string but doesn't have markdown code fences
     if (trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
       try {
-        return JSON.parse(trimmedText);
+        const parsed = JSON.parse(trimmedText);
+        console.log('[normalizeN8nResponse] Successfully parsed JSON from text field:', parsed);
+        return parsed;
       } catch (err) {
         console.error('[normalizeN8nResponse] Failed to parse JSON from text field:', err);
         throw new Error(`Failed to parse travel plan: ${err.message}`);
@@ -40,6 +61,7 @@ function normalizeN8nResponse(raw) {
     }
   }
 
+  console.log('[normalizeN8nResponse] Final normalized data output:', data);
   return data;
 }
 
@@ -82,6 +104,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const itineraryContainer = document.getElementById('itinerary-timeline-container');
   const budgetListContainer = document.getElementById('budget-list-container');
   const budgetTotalCost = document.getElementById('budget-total-cost');
+
+  // Global Application State to store dynamic data
+  const appState = {
+    formData: null,
+    travelPlan: null
+  };
   const weatherListContainer = document.getElementById('weather-list-container');
   const packingListContainer = document.getElementById('packing-list-container');
   const attractionsGrid = document.getElementById('attractions-grid');
@@ -237,9 +265,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function showPlannerResults(formData, plannerResponse) {
-    const data = normalizeN8nResponse(plannerResponse);
-    const styleStr = formData.travelStyles.length > 0 ? formData.travelStyles.join(', ') : "General";
+  function showPlannerResults() {
+    console.log('[planner] showPlannerResults triggered.');
+    const data = appState.travelPlan;
+    const formData = appState.formData;
+
+    if (!data || !formData) {
+      console.error('[planner] showPlannerResults called with empty appState!', appState);
+      return;
+    }
+
+    const styleStr = formData.travelStyles && formData.travelStyles.length > 0 
+      ? formData.travelStyles.join(', ') 
+      : "General";
 
     resultsBadge.textContent = data.badge || data.status || data.label || 'Itinerary Ready';
     
@@ -262,15 +300,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    renderItinerary(data, formData);
-    renderBudget(data, formData.budget);
-    renderWeather(data);
-    renderPacking(data);
-    renderAttractions(data);
-    renderHotels(data);
-    renderFoods(data);
-    renderTransport(data);
-    renderSafety(data);
+    console.log('[planner] Executing component-specific rendering with isolation...');
+
+    const renderComponents = [
+      { name: 'Itinerary', fn: renderItinerary },
+      { name: 'Budget', fn: renderBudget },
+      { name: 'Weather', fn: renderWeather },
+      { name: 'Packing', fn: renderPacking },
+      { name: 'Attractions', fn: renderAttractions },
+      { name: 'Hotels', fn: renderHotels },
+      { name: 'Foods', fn: renderFoods },
+      { name: 'Transport', fn: renderTransport },
+      { name: 'Safety', fn: renderSafety }
+    ];
+
+    renderComponents.forEach(component => {
+      try {
+        console.log(`[planner] Rendering panel: ${component.name}`);
+        component.fn();
+      } catch (err) {
+        console.error(`[planner] Failed rendering panel "${component.name}":`, err);
+      }
+    });
 
     resultsSection.classList.add('visible');
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -278,357 +329,462 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof lucide !== 'undefined') {
       lucide.createIcons();
     }
+    console.log('[planner] showPlannerResults execution completed.');
   }
 
-  function renderItinerary(data, formData) {
-    itineraryContainer.innerHTML = '';
-    const days = data.itinerary || data.itineraryDays || data.days_plan || data.days;
+   function renderItinerary() {
+    try {
+      itineraryContainer.innerHTML = '';
+      const data = appState.travelPlan;
+      const formData = appState.formData;
+      if (!data || !formData) {
+        itineraryContainer.innerHTML = `<p class="card-desc">Itinerary details will appear here after a trip is generated.</p>`;
+        return;
+      }
 
-    if (Array.isArray(days) && days.length > 0) {
-      days.forEach((dayData, index) => {
-        const dayEl = document.createElement('div');
-        dayEl.className = 'itinerary-day';
-        
-        const dayNum = dayData.day || dayData.day_number || index + 1;
-        const dayTitle = dayData.title || dayData.theme || dayData.heading || dayData.summary || 'Daily Exploration';
+      const days = data.itinerary || data.itineraryDays || data.days_plan || data.days;
 
-        // Extract morning activity details dynamically
-        const morningTitle = dayData.morning_title || dayData.morningTitle || dayData.am_title || 'Morning Adventure';
-        const morningDesc = typeof dayData.morning === 'object' 
-          ? (dayData.morning.desc || dayData.morning.description || dayData.morning.activity || '') 
-          : (dayData.morning || dayData.am || dayData.morning_activity || dayData.morningActivity || '');
+      if (Array.isArray(days) && days.length > 0) {
+        days.forEach((dayData, index) => {
+          if (!dayData) return;
+          const dayEl = document.createElement('div');
+          dayEl.className = 'itinerary-day';
+          
+          const dayNum = dayData.day || dayData.day_number || index + 1;
+          const dayTitle = dayData.title || dayData.theme || dayData.heading || dayData.summary || 'Daily Exploration';
 
-        // Extract afternoon activity details dynamically
-        const afternoonTitle = dayData.afternoon_title || dayData.afternoonTitle || dayData.pm_title || 'Midday Exploration';
-        const afternoonDesc = typeof dayData.afternoon === 'object' 
-          ? (dayData.afternoon.desc || dayData.afternoon.description || dayData.afternoon.activity || '') 
-          : (dayData.afternoon || dayData.pm || dayData.afternoon_activity || dayData.afternoonActivity || '');
+          // Extract morning activity details dynamically
+          const morningTitle = dayData.morning_title || dayData.morningTitle || dayData.am_title || 'Morning Adventure';
+          const morningDesc = (dayData.morning && typeof dayData.morning === 'object') 
+            ? (dayData.morning.desc || dayData.morning.description || dayData.morning.activity || '') 
+            : (dayData.morning || dayData.am || dayData.morning_activity || dayData.morningActivity || '');
 
-        // Extract evening activity details dynamically
-        const eveningTitle = dayData.evening_title || dayData.eveningTitle || dayData.night_title || 'Evening & Dinner';
-        const eveningDesc = typeof dayData.evening === 'object' 
-          ? (dayData.evening.desc || dayData.evening.description || dayData.evening.activity || '') 
-          : (dayData.evening || dayData.night || dayData.evening_activity || dayData.eveningActivity || '');
+          // Extract afternoon activity details dynamically
+          const afternoonTitle = dayData.afternoon_title || dayData.afternoonTitle || dayData.pm_title || 'Midday Exploration';
+          const afternoonDesc = (dayData.afternoon && typeof dayData.afternoon === 'object') 
+            ? (dayData.afternoon.desc || dayData.afternoon.description || dayData.afternoon.activity || '') 
+            : (dayData.afternoon || dayData.pm || dayData.afternoon_activity || dayData.afternoonActivity || '');
 
-        dayEl.innerHTML = `
+          // Extract evening activity details dynamically
+          const eveningTitle = dayData.evening_title || dayData.eveningTitle || dayData.night_title || 'Evening & Dinner';
+          const eveningDesc = (dayData.evening && typeof dayData.evening === 'object') 
+            ? (dayData.evening.desc || dayData.evening.description || dayData.evening.activity || '') 
+            : (dayData.evening || dayData.night || dayData.evening_activity || dayData.eveningActivity || '');
+
+          dayEl.innerHTML = `
+            <div class="day-header">
+              <span class="badge badge-primary">Day ${dayNum}</span>
+              <h3>${escapeHtml(dayTitle)}</h3>
+            </div>
+            <div class="day-timeline">
+              <div class="timeline-item">
+                <div class="timeline-marker"></div>
+                <div class="timeline-time">Morning</div>
+                <div class="timeline-title">${escapeHtml(morningTitle)}</div>
+                <div class="timeline-desc">${escapeHtml(morningDesc)}</div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-marker"></div>
+                <div class="timeline-time">Afternoon</div>
+                <div class="timeline-title">${escapeHtml(afternoonTitle)}</div>
+                <div class="timeline-desc">${escapeHtml(afternoonDesc)}</div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-marker"></div>
+                <div class="timeline-time">Evening</div>
+                <div class="timeline-title">${escapeHtml(eveningTitle)}</div>
+                <div class="timeline-desc">${escapeHtml(eveningDesc)}</div>
+              </div>
+            </div>
+          `;
+          itineraryContainer.appendChild(dayEl);
+        });
+        return;
+      }
+
+      const planText = data.plan || data.message || data.output || data.itineraryText;
+      const fallbackText = planText
+        || `Your ${formData.days}-day trip to ${formData.destination} is ready.`;
+
+      itineraryContainer.innerHTML = `
+        <div class="itinerary-day">
           <div class="day-header">
-            <span class="badge badge-primary">Day ${dayNum}</span>
-            <h3>${escapeHtml(dayTitle)}</h3>
+            <span class="badge badge-primary">Plan</span>
+            <h3>TravelMind Plan</h3>
           </div>
           <div class="day-timeline">
             <div class="timeline-item">
               <div class="timeline-marker"></div>
-              <div class="timeline-time">Morning</div>
-              <div class="timeline-title">${escapeHtml(morningTitle)}</div>
-              <div class="timeline-desc">${escapeHtml(morningDesc)}</div>
+              <div class="timeline-desc" style="white-space: pre-wrap;">${escapeHtml(String(fallbackText))}</div>
             </div>
-            <div class="timeline-item">
-              <div class="timeline-marker"></div>
-              <div class="timeline-time">Afternoon</div>
-              <div class="timeline-title">${escapeHtml(afternoonTitle)}</div>
-              <div class="timeline-desc">${escapeHtml(afternoonDesc)}</div>
+          </div>
+        </div>
+      `;
+    } catch (err) {
+      console.error('[renderItinerary] Critical error:', err);
+      itineraryContainer.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render itinerary panel: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderBudget() {
+    try {
+      budgetListContainer.innerHTML = '';
+      const data = appState.travelPlan;
+      const formData = appState.formData;
+      if (!data || !formData) {
+        budgetListContainer.innerHTML = `<p class="card-desc">Budget breakdown will appear here after a trip is generated.</p>`;
+        budgetTotalCost.textContent = '';
+        return;
+      }
+      
+      let breakdown = data.budgetBreakdown || data.expenses || data.cost_breakdown || data.cost || data.budget;
+      const total = data.totalBudget || data.budgetTotal || data.total_cost || (data.budget && data.budget.total) || formData.budget;
+      
+      if (typeof breakdown === 'number' || typeof breakdown === 'string') {
+        breakdown = null;
+      }
+
+      let displayTotal = '';
+      if (typeof total === 'number') {
+        displayTotal = `₹${total.toLocaleString('en-IN')}`;
+      } else if (typeof total === 'string') {
+        displayTotal = total.trim().startsWith('₹') ? total.trim() : `₹${total.trim()}`;
+      } else {
+        displayTotal = `₹0`;
+      }
+      budgetTotalCost.textContent = displayTotal;
+
+      const parsedTotal = total ? (typeof total === 'number' ? total : parseInt(String(total).replace(/[^\d]/g, ''), 10)) : formData.budget;
+
+      if (Array.isArray(breakdown) && breakdown.length > 0) {
+        breakdown.forEach(item => {
+          if (!item) return;
+          const label = item.category || item.label || item.name || item.expense || 'Expense';
+          const value = item.cost || item.amount || item.value || item.price || 0;
+          const amount = typeof value === 'number' ? value : parseInt(String(value).replace(/[^\d]/g, ''), 10);
+          const pct = parsedTotal ? Math.min(100, Math.round((amount / parsedTotal) * 100)) : 0;
+          
+          const divItem = document.createElement('div');
+          divItem.className = 'budget-item';
+          divItem.innerHTML = `
+            <div class="budget-label-row">
+                <span class="budget-cat">${escapeHtml(label)}</span>
+                <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
             </div>
-            <div class="timeline-item">
-              <div class="timeline-marker"></div>
-              <div class="timeline-time">Evening</div>
-              <div class="timeline-title">${escapeHtml(eveningTitle)}</div>
-              <div class="timeline-desc">${escapeHtml(eveningDesc)}</div>
+            <div class="progress-track">
+                <div class="progress-bar" data-value="${pct}%"></div>
             </div>
+          `;
+          budgetListContainer.appendChild(divItem);
+        });
+      } else if (breakdown && typeof breakdown === 'object' && Object.keys(breakdown).length > 0) {
+        Object.entries(breakdown).forEach(([label, value]) => {
+          if (label.toLowerCase() === 'total') return;
+
+          const amount = typeof value === 'number' ? value : parseInt(String(value).replace(/[^\d]/g, ''), 10);
+          const pct = parsedTotal ? Math.min(100, Math.round((amount / parsedTotal) * 100)) : 0;
+          
+          const divItem = document.createElement('div');
+          divItem.className = 'budget-item';
+          divItem.innerHTML = `
+            <div class="budget-label-row">
+                <span class="budget-cat">${escapeHtml(label)}</span>
+                <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-bar" data-value="${pct}%"></div>
+            </div>
+          `;
+          budgetListContainer.appendChild(divItem);
+        });
+      } else {
+        budgetListContainer.innerHTML = `<p class="card-desc">Detailed expenses breakdown is not available.</p>`;
+      }
+
+      setTimeout(() => {
+        document.querySelectorAll('.progress-bar').forEach(bar => {
+          bar.style.width = bar.getAttribute('data-value');
+        });
+      }, 300);
+    } catch (err) {
+      console.error('[renderBudget] Critical error:', err);
+      budgetListContainer.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render budget panel: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderWeather() {
+    try {
+      weatherListContainer.innerHTML = '';
+      const data = appState.travelPlan;
+      if (!data) {
+        weatherListContainer.innerHTML = `<p class="card-desc">Weather details will appear here after a trip is generated.</p>`;
+        return;
+      }
+      const weather = data.weather || data.weatherForecast || data.forecast || data.weather_forecast || data.weather_details;
+      if (!Array.isArray(weather) || weather.length === 0) {
+        weatherListContainer.innerHTML = `<p class="card-desc">Weather forecast is not available.</p>`;
+        return;
+      }
+      weather.forEach(w => {
+        if (!w) return;
+        const card = document.createElement('div');
+        card.className = 'weather-day-card';
+        const dayName = w.day || w.date || w.name || w.day_name || 'Day';
+        const temp = w.temp || w.temperature || w.avg_temp || w.temp_range || '';
+        const condition = w.cond || w.condition || w.weather || w.sky || '';
+        const icon = w.icon || w.weather_icon || 'cloud-sun';
+        
+        card.innerHTML = `
+          <div class="weather-name">${escapeHtml(dayName)}</div>
+          <div class="weather-icon"><i data-lucide="${icon}"></i></div>
+          <div class="weather-temp">${escapeHtml(temp)}</div>
+          <div class="weather-desc">${escapeHtml(condition)}</div>
+        `;
+        weatherListContainer.appendChild(card);
+      });
+    } catch (err) {
+      console.error('[renderWeather] Critical error:', err);
+      weatherListContainer.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render weather panel: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderPacking() {
+    try {
+      packingListContainer.innerHTML = '';
+      const data = appState.travelPlan;
+      if (!data) {
+        packingListContainer.innerHTML = `<p class="card-desc">Packing checklist will appear here after a trip is generated.</p>`;
+        return;
+      }
+      const packing = data.packing || data.packingList || data.checklist || data.packing_list || data.packing_checklist || data.items_to_pack;
+      if (!Array.isArray(packing) || packing.length === 0) {
+        packingListContainer.innerHTML = `<p class="card-desc">Packing checklist is empty.</p>`;
+        return;
+      }
+      packing.forEach((item, idx) => {
+        if (!item) return;
+        const label = document.createElement('label');
+        label.className = 'packing-item';
+        const name = typeof item === 'string' ? item : (item.name || item.item || item.title || '');
+        label.innerHTML = `
+          <input type="checkbox" id="pack-chk-${idx}">
+          <span>${escapeHtml(name)}</span>
+        `;
+        packingListContainer.appendChild(label);
+      });
+    } catch (err) {
+      console.error('[renderPacking] Critical error:', err);
+      packingListContainer.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render packing panel: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderAttractions() {
+    try {
+      attractionsGrid.innerHTML = '';
+      const data = appState.travelPlan;
+      if (!data) {
+        attractionsGrid.innerHTML = `<p class="card-desc">Attraction recommendations will appear here after a trip is generated.</p>`;
+        return;
+      }
+      const attractions = data.attractions || data.recommendedAttractions || data.places_to_visit || data.sightseeing || data.points_of_interest;
+      if (!Array.isArray(attractions) || attractions.length === 0) {
+        attractionsGrid.innerHTML = `<p class="card-desc">No attractions found for this destination.</p>`;
+        return;
+      }
+      attractions.forEach(attr => {
+        if (!attr) return;
+        const card = document.createElement('div');
+        card.className = 'glass-panel attraction-card';
+        
+        const imgUrl = attr.image || attr.image_url || attr.imageUrl || attr.photo || '';
+        const imgHtml = imgUrl 
+          ? `<div class="card-img-wrapper"><img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(attr.name || 'Attraction')}"></div>`
+          : '';
+          
+        const ratingVal = attr.rating || attr.stars || '';
+        const reviewsVal = attr.reviews || attr.reviews_count || '';
+        const ratingHtml = ratingVal
+          ? `<div class="card-rating-row">
+              <div class="card-rating">
+                <i data-lucide="star" style="width: 14px; height: 14px; fill: #fbbf24; color: #fbbf24;"></i> 
+                <span>${escapeHtml(String(ratingVal))}</span>
+                ${reviewsVal ? `<span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${escapeHtml(String(reviewsVal))})</span>` : ''}
+              </div>
+             </div>`
+          : '';
+
+        card.innerHTML = `
+          ${imgHtml}
+          <div class="card-content">
+            ${ratingHtml}
+            <h4 class="card-title">${escapeHtml(attr.name || attr.title || attr.attraction_name || 'Attraction')}</h4>
+            <p class="card-desc">${escapeHtml(attr.desc || attr.description || attr.info || '')}</p>
           </div>
         `;
-        itineraryContainer.appendChild(dayEl);
+        attractionsGrid.appendChild(card);
       });
-      return;
+    } catch (err) {
+      console.error('[renderAttractions] Critical error:', err);
+      attractionsGrid.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render attractions panel: ${escapeHtml(err.message)}</p>`;
     }
-
-    const planText = data.plan || data.message || data.output || data.itineraryText;
-    const fallbackText = planText
-      || `Your ${formData.days}-day trip to ${formData.destination} is ready.`;
-
-    itineraryContainer.innerHTML = `
-      <div class="itinerary-day">
-        <div class="day-header">
-          <span class="badge badge-primary">Plan</span>
-          <h3>TravelMind Plan</h3>
-        </div>
-        <div class="day-timeline">
-          <div class="timeline-item">
-            <div class="timeline-marker"></div>
-            <div class="timeline-desc" style="white-space: pre-wrap;">${escapeHtml(String(fallbackText))}</div>
-          </div>
-        </div>
-      </div>
-    `;
   }
 
-  function renderBudget(data, fallbackBudget) {
-    budgetListContainer.innerHTML = '';
-    
-    let breakdown = data.budgetBreakdown || data.expenses || data.cost_breakdown || data.cost || data.budget;
-    const total = data.totalBudget || data.budgetTotal || data.total_cost || (data.budget && data.budget.total) || fallbackBudget;
-    
-    if (typeof breakdown === 'number' || typeof breakdown === 'string') {
-      breakdown = null;
-    }
+  function renderHotels() {
+    try {
+      hotelsGrid.innerHTML = '';
+      const data = appState.travelPlan;
+      if (!data) {
+        hotelsGrid.innerHTML = `<p class="card-desc">Hotel recommendations will appear here after a trip is generated.</p>`;
+        return;
+      }
+      const hotels = data.hotels || data.recommendedStays || data.accommodations || data.stays;
+      if (!Array.isArray(hotels) || hotels.length === 0) {
+        hotelsGrid.innerHTML = `<p class="card-desc">No hotel recommendations found.</p>`;
+        return;
+      }
+      hotels.forEach(hotel => {
+        if (!hotel) return;
+        const card = document.createElement('div');
+        card.className = 'glass-panel hotel-card';
 
-    let displayTotal = '';
-    if (typeof total === 'number') {
-      displayTotal = `₹${total.toLocaleString('en-IN')}`;
-    } else if (typeof total === 'string') {
-      displayTotal = total.trim().startsWith('₹') ? total.trim() : `₹${total.trim()}`;
-    } else {
-      displayTotal = `₹0`;
-    }
-    budgetTotalCost.textContent = displayTotal;
+        const imgUrl = hotel.image || hotel.image_url || hotel.imageUrl || hotel.photo || '';
+        const imgHtml = imgUrl 
+          ? `<div class="card-img-wrapper"><img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(hotel.name || 'Hotel')}"></div>`
+          : '';
+          
+        const ratingVal = hotel.rating || hotel.stars || '';
+        const reviewsVal = hotel.reviews || hotel.reviews_count || '';
+        const ratingHtml = ratingVal
+          ? `<div class="card-rating-row">
+              <div class="card-rating">
+                <i data-lucide="star" style="width: 14px; height: 14px; fill: #fbbf24; color: #fbbf24;"></i> 
+                <span>${escapeHtml(String(ratingVal))}</span>
+                ${reviewsVal ? `<span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${escapeHtml(String(reviewsVal))})</span>` : ''}
+              </div>
+             </div>`
+          : '';
 
-    const parsedTotal = total ? (typeof total === 'number' ? total : parseInt(String(total).replace(/[^\d]/g, ''), 10)) : fallbackBudget;
+        const priceVal = hotel.price || hotel.cost || hotel.price_per_night || '';
+        const descVal = hotel.desc || hotel.description || hotel.info || '';
 
-    if (Array.isArray(breakdown) && breakdown.length > 0) {
-      breakdown.forEach(item => {
-        const label = item.category || item.label || item.name || item.expense || 'Expense';
-        const value = item.cost || item.amount || item.value || item.price || 0;
-        const amount = typeof value === 'number' ? value : parseInt(String(value).replace(/[^\d]/g, ''), 10);
-        const pct = parsedTotal ? Math.min(100, Math.round((amount / parsedTotal) * 100)) : 0;
-        
-        const divItem = document.createElement('div');
-        divItem.className = 'budget-item';
-        divItem.innerHTML = `
-          <div class="budget-label-row">
-              <span class="budget-cat">${escapeHtml(label)}</span>
-              <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
-          </div>
-          <div class="progress-track">
-              <div class="progress-bar" data-value="${pct}%"></div>
+        card.innerHTML = `
+          ${imgHtml}
+          <div class="card-content">
+            ${ratingHtml}
+            <h4 class="card-title">${escapeHtml(hotel.name || hotel.hotel_name || hotel.title || 'Hotel')}</h4>
+            <p class="card-desc">${escapeHtml(descVal)}</p>
+            ${priceVal ? `<div class="hotel-price">${escapeHtml(priceVal)}</div>` : ''}
           </div>
         `;
-        budgetListContainer.appendChild(divItem);
+        hotelsGrid.appendChild(card);
       });
-    } else if (breakdown && typeof breakdown === 'object' && Object.keys(breakdown).length > 0) {
-      Object.entries(breakdown).forEach(([label, value]) => {
-        if (label.toLowerCase() === 'total') return;
+    } catch (err) {
+      console.error('[renderHotels] Critical error:', err);
+      hotelsGrid.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render hotels panel: ${escapeHtml(err.message)}</p>`;
+    }
+  }
 
-        const amount = typeof value === 'number' ? value : parseInt(String(value).replace(/[^\d]/g, ''), 10);
-        const pct = parsedTotal ? Math.min(100, Math.round((amount / parsedTotal) * 100)) : 0;
+  function renderFoods() {
+    try {
+      foodsGridContainer.innerHTML = '';
+      const data = appState.travelPlan;
+      if (!data) {
+        foodsGridContainer.innerHTML = `<p class="card-desc">Food recommendations will appear here after a trip is generated.</p>`;
+        return;
+      }
+      const foods = data.foods || data.localCuisine || data.food_recommendations || data.dishes || data.local_foods;
+      if (!Array.isArray(foods) || foods.length === 0) {
+        foodsGridContainer.innerHTML = `<p class="card-desc">No local foods recommendations found.</p>`;
+        return;
+      }
+      foods.forEach(food => {
+        if (!food) return;
+        const card = document.createElement('div');
+        card.className = 'glass-panel food-item-card';
         
-        const divItem = document.createElement('div');
-        divItem.className = 'budget-item';
-        divItem.innerHTML = `
-          <div class="budget-label-row">
-              <span class="budget-cat">${escapeHtml(label)}</span>
-              <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
-          </div>
-          <div class="progress-track">
-              <div class="progress-bar" data-value="${pct}%"></div>
+        const emojiVal = food.emoji || food.icon || '🍽️';
+        
+        card.innerHTML = `
+          <span class="food-emoji">${escapeHtml(emojiVal)}</span>
+          <h4 class="food-title">${escapeHtml(food.name || food.dish_name || food.title || 'Local Dish')}</h4>
+          <p class="food-desc">${escapeHtml(food.desc || food.description || food.info || '')}</p>
+        `;
+        foodsGridContainer.appendChild(card);
+      });
+    } catch (err) {
+      console.error('[renderFoods] Critical error:', err);
+      foodsGridContainer.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render local foods panel: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderTransport() {
+    try {
+      transportListContainer.innerHTML = '';
+      const data = appState.travelPlan;
+      if (!data) {
+        transportListContainer.innerHTML = `<p class="card-desc">Transport guide will appear here after a trip is generated.</p>`;
+        return;
+      }
+      const transport = data.transport || data.transportation || data.travel_modes || data.transport_guide;
+      if (!Array.isArray(transport) || transport.length === 0) {
+        transportListContainer.innerHTML = `<p class="card-desc">No transport guide found.</p>`;
+        return;
+      }
+      transport.forEach(t => {
+        if (!t) return;
+        const item = document.createElement('div');
+        item.className = 'transport-item';
+        const typeVal = t.type || t.name || t.mode || 'Transport';
+        const noteVal = t.efficiency || t.note || t.details || t.description || 'Recommended';
+        item.innerHTML = `
+          <div class="transport-label"><span>${escapeHtml(typeVal)}</span></div>
+          <span class="badge badge-primary">${escapeHtml(noteVal)}</span>
+        `;
+        transportListContainer.appendChild(item);
+      });
+    } catch (err) {
+      console.error('[renderTransport] Critical error:', err);
+      transportListContainer.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render transport panel: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderSafety() {
+    try {
+      safetyListContainer.innerHTML = '';
+      const data = appState.travelPlan;
+      if (!data) {
+        safetyListContainer.innerHTML = `<p class="card-desc">Safety tips will appear here after a trip is generated.</p>`;
+        return;
+      }
+      const safety = data.safety || data.safetyTips || data.safety_tips || data.tips || data.advice;
+      if (!Array.isArray(safety) || safety.length === 0) {
+        safetyListContainer.innerHTML = `<p class="card-desc">No safety tips found.</p>`;
+        return;
+      }
+      safety.forEach(tip => {
+        if (!tip) return;
+        const item = document.createElement('div');
+        item.className = 'safety-item';
+        const iconVal = tip.icon || tip.emoji || '💡';
+        const titleVal = tip.title || tip.name || tip.heading || 'Tip';
+        const descVal = tip.desc || tip.description || tip.detail || '';
+        item.innerHTML = `
+          <span class="safety-icon">${escapeHtml(iconVal)}</span>
+          <div class="safety-item-content">
+            <h4 class="safety-item-title">${escapeHtml(titleVal)}</h4>
+            <p class="safety-item-desc">${escapeHtml(descVal)}</p>
           </div>
         `;
-        budgetListContainer.appendChild(divItem);
+        safetyListContainer.appendChild(item);
       });
-    } else {
-      budgetListContainer.innerHTML = `<p class="card-desc">Budget breakdown will appear here after a trip is generated.</p>`;
+    } catch (err) {
+      console.error('[renderSafety] Critical error:', err);
+      safetyListContainer.innerHTML = `<p class="card-desc" style="color: var(--accent-color);">Failed to render safety panel: ${escapeHtml(err.message)}</p>`;
     }
-
-    setTimeout(() => {
-      document.querySelectorAll('.progress-bar').forEach(bar => {
-        bar.style.width = bar.getAttribute('data-value');
-      });
-    }, 300);
-  }
-
-  function renderWeather(data) {
-    weatherListContainer.innerHTML = '';
-    const weather = data.weather || data.weatherForecast || data.forecast || data.weather_forecast || data.weather_details;
-    if (!Array.isArray(weather) || weather.length === 0) {
-      weatherListContainer.innerHTML = `<p class="card-desc">Weather details will appear here after a trip is generated.</p>`;
-      return;
-    }
-    weather.forEach(w => {
-      const card = document.createElement('div');
-      card.className = 'weather-day-card';
-      const dayName = w.day || w.date || w.name || w.day_name || 'Day';
-      const temp = w.temp || w.temperature || w.avg_temp || w.temp_range || '';
-      const condition = w.cond || w.condition || w.weather || w.sky || '';
-      const icon = w.icon || w.weather_icon || 'cloud-sun';
-      
-      card.innerHTML = `
-        <div class="weather-name">${escapeHtml(dayName)}</div>
-        <div class="weather-icon"><i data-lucide="${icon}"></i></div>
-        <div class="weather-temp">${escapeHtml(temp)}</div>
-        <div class="weather-desc">${escapeHtml(condition)}</div>
-      `;
-      weatherListContainer.appendChild(card);
-    });
-  }
-
-  function renderPacking(data) {
-    packingListContainer.innerHTML = '';
-    const packing = data.packing || data.packingList || data.checklist || data.packing_list || data.packing_checklist || data.items_to_pack;
-    if (!Array.isArray(packing) || packing.length === 0) {
-      packingListContainer.innerHTML = `<p class="card-desc">Packing checklist will appear here after a trip is generated.</p>`;
-      return;
-    }
-    packing.forEach((item, idx) => {
-      const label = document.createElement('label');
-      label.className = 'packing-item';
-      const name = typeof item === 'string' ? item : (item.name || item.item || item.title || '');
-      label.innerHTML = `
-        <input type="checkbox" id="pack-chk-${idx}">
-        <span>${escapeHtml(name)}</span>
-      `;
-      packingListContainer.appendChild(label);
-    });
-  }
-
-  function renderAttractions(data) {
-    attractionsGrid.innerHTML = '';
-    const attractions = data.attractions || data.recommendedAttractions || data.places_to_visit || data.sightseeing || data.points_of_interest;
-    if (!Array.isArray(attractions) || attractions.length === 0) {
-      attractionsGrid.innerHTML = `<p class="card-desc">Attraction recommendations will appear here after a trip is generated.</p>`;
-      return;
-    }
-    attractions.forEach(attr => {
-      const card = document.createElement('div');
-      card.className = 'glass-panel attraction-card';
-      
-      const imgUrl = attr.image || attr.image_url || attr.imageUrl || attr.photo || '';
-      const imgHtml = imgUrl 
-        ? `<div class="card-img-wrapper"><img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(attr.name || 'Attraction')}"></div>`
-        : '';
-        
-      const ratingVal = attr.rating || attr.stars || '';
-      const reviewsVal = attr.reviews || attr.reviews_count || '';
-      const ratingHtml = ratingVal
-        ? `<div class="card-rating-row">
-            <div class="card-rating">
-              <i data-lucide="star" style="width: 14px; height: 14px; fill: #fbbf24; color: #fbbf24;"></i> 
-              <span>${escapeHtml(String(ratingVal))}</span>
-              ${reviewsVal ? `<span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${escapeHtml(String(reviewsVal))})</span>` : ''}
-            </div>
-           </div>`
-        : '';
-
-      card.innerHTML = `
-        ${imgHtml}
-        <div class="card-content">
-          ${ratingHtml}
-          <h4 class="card-title">${escapeHtml(attr.name || attr.title || attr.attraction_name || 'Attraction')}</h4>
-          <p class="card-desc">${escapeHtml(attr.desc || attr.description || attr.info || '')}</p>
-        </div>
-      `;
-      attractionsGrid.appendChild(card);
-    });
-  }
-
-  function renderHotels(data) {
-    hotelsGrid.innerHTML = '';
-    const hotels = data.hotels || data.recommendedStays || data.accommodations || data.stays;
-    if (!Array.isArray(hotels) || hotels.length === 0) {
-      hotelsGrid.innerHTML = `<p class="card-desc">Hotel recommendations will appear here after a trip is generated.</p>`;
-      return;
-    }
-    hotels.forEach(hotel => {
-      const card = document.createElement('div');
-      card.className = 'glass-panel hotel-card';
-
-      const imgUrl = hotel.image || hotel.image_url || hotel.imageUrl || hotel.photo || '';
-      const imgHtml = imgUrl 
-        ? `<div class="card-img-wrapper"><img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(hotel.name || 'Hotel')}"></div>`
-        : '';
-        
-      const ratingVal = hotel.rating || hotel.stars || '';
-      const reviewsVal = hotel.reviews || hotel.reviews_count || '';
-      const ratingHtml = ratingVal
-        ? `<div class="card-rating-row">
-            <div class="card-rating">
-              <i data-lucide="star" style="width: 14px; height: 14px; fill: #fbbf24; color: #fbbf24;"></i> 
-              <span>${escapeHtml(String(ratingVal))}</span>
-              ${reviewsVal ? `<span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${escapeHtml(String(reviewsVal))})</span>` : ''}
-            </div>
-           </div>`
-        : '';
-
-      const priceVal = hotel.price || hotel.cost || hotel.price_per_night || '';
-      const descVal = hotel.desc || hotel.description || hotel.info || '';
-
-      card.innerHTML = `
-        ${imgHtml}
-        <div class="card-content">
-          ${ratingHtml}
-          <h4 class="card-title">${escapeHtml(hotel.name || hotel.hotel_name || hotel.title || 'Hotel')}</h4>
-          <p class="card-desc">${escapeHtml(descVal)}</p>
-          ${priceVal ? `<div class="hotel-price">${escapeHtml(priceVal)}</div>` : ''}
-        </div>
-      `;
-      hotelsGrid.appendChild(card);
-    });
-  }
-
-  function renderFoods(data) {
-    foodsGridContainer.innerHTML = '';
-    const foods = data.foods || data.localCuisine || data.food_recommendations || data.dishes || data.local_foods;
-    if (!Array.isArray(foods) || foods.length === 0) {
-      foodsGridContainer.innerHTML = `<p class="card-desc">Food recommendations will appear here after a trip is generated.</p>`;
-      return;
-    }
-    foods.forEach(food => {
-      const card = document.createElement('div');
-      card.className = 'glass-panel food-item-card';
-      
-      const emojiVal = food.emoji || food.icon || '🍽️';
-      
-      card.innerHTML = `
-        <span class="food-emoji">${escapeHtml(emojiVal)}</span>
-        <h4 class="food-title">${escapeHtml(food.name || food.dish_name || food.title || 'Local Dish')}</h4>
-        <p class="food-desc">${escapeHtml(food.desc || food.description || food.info || '')}</p>
-      `;
-      foodsGridContainer.appendChild(card);
-    });
-  }
-
-  function renderTransport(data) {
-    transportListContainer.innerHTML = '';
-    const transport = data.transport || data.transportation || data.travel_modes || data.transport_guide;
-    if (!Array.isArray(transport) || transport.length === 0) {
-      transportListContainer.innerHTML = `<p class="card-desc">Transport guide will appear here after a trip is generated.</p>`;
-      return;
-    }
-    transport.forEach(t => {
-      const item = document.createElement('div');
-      item.className = 'transport-item';
-      const typeVal = t.type || t.name || t.mode || 'Transport';
-      const noteVal = t.efficiency || t.note || t.details || t.description || 'Recommended';
-      item.innerHTML = `
-        <div class="transport-label"><span>${escapeHtml(typeVal)}</span></div>
-        <span class="badge badge-primary">${escapeHtml(noteVal)}</span>
-      `;
-      transportListContainer.appendChild(item);
-    });
-  }
-
-  function renderSafety(data) {
-    safetyListContainer.innerHTML = '';
-    const safety = data.safety || data.safetyTips || data.safety_tips || data.tips || data.advice;
-    if (!Array.isArray(safety) || safety.length === 0) {
-      safetyListContainer.innerHTML = `<p class="card-desc">Safety tips will appear here after a trip is generated.</p>`;
-      return;
-    }
-    safety.forEach(tip => {
-      const item = document.createElement('div');
-      item.className = 'safety-item';
-      const iconVal = tip.icon || tip.emoji || '💡';
-      const titleVal = tip.title || tip.name || tip.heading || 'Tip';
-      const descVal = tip.desc || tip.description || tip.detail || '';
-      item.innerHTML = `
-        <span class="safety-icon">${escapeHtml(iconVal)}</span>
-        <div class="safety-item-content">
-          <h4 class="safety-item-title">${escapeHtml(titleVal)}</h4>
-          <p class="safety-item-desc">${escapeHtml(descVal)}</p>
-        </div>
-      `;
-      safetyListContainer.appendChild(item);
-    });
   }
 
   async function handleGenerateTrip() {
+    console.log('[planner] Form submitted. Extracting input values...');
     const destVal = destinationInput.value.trim();
     const startVal = startDateInput.value;
     const endVal = endDateInput.value;
@@ -637,11 +793,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const preferencesVal = preferencesInput.value.trim();
 
     if (!destVal || !startVal || !endVal || Number.isNaN(budgetVal) || Number.isNaN(travelersVal)) {
+      console.warn('[planner] Validation failed: missing required inputs.');
       alert("Please fill in all the planner options to continue.");
       return;
     }
 
     if (new Date(endVal) < new Date(startVal)) {
+      console.warn('[planner] Validation failed: end date is before start date.');
       alert("End date should be on or after start date.");
       return;
     }
@@ -664,26 +822,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       preferences: preferencesVal
     };
 
+    console.log('[planner] Sending request to webhook...', { url: WEBHOOK_URL, payload: formData });
     setPlannerLoadingState(true, "Generating your trip...");
 
     try {
       const response = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true"
         },
         body: JSON.stringify(formData)
       });
+
+      console.log(`[planner] Webhook response received. Status: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
         throw new Error(`Server returned status ${response.status}: ${response.statusText}`);
       }
 
       const rawData = await response.json();
+      console.log('[planner] Parsed raw response JSON:', rawData);
+      
       const travelPlan = normalizeN8nResponse(rawData);
+      console.log('[planner] Normalized travel plan:', travelPlan);
+
+      // Save to application state
+      console.log('[planner] Storing results in application state (appState)...');
+      appState.formData = formData;
+      appState.travelPlan = travelPlan;
 
       setPlannerLoadingState(false);
-      showPlannerResults(formData, travelPlan);
+      console.log('[planner] Triggering UI results rendering...');
+      showPlannerResults();
       showToast("Trip generated successfully!");
     } catch (err) {
       setPlannerLoadingState(false);
