@@ -77,6 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const resultsSection = document.getElementById('results');
   const resultsTitle = document.getElementById('results-title');
   const resultsSubtitle = document.getElementById('results-subtitle');
+  const resultsOverview = document.getElementById('results-overview');
   const resultsBadge = document.getElementById('results-badge');
   const itineraryContainer = document.getElementById('itinerary-timeline-container');
   const budgetListContainer = document.getElementById('budget-list-container');
@@ -240,10 +241,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const data = normalizeN8nResponse(plannerResponse);
     const styleStr = formData.travelStyles.length > 0 ? formData.travelStyles.join(', ') : "General";
 
-    resultsBadge.textContent = data.badge || 'Itinerary Ready';
-    resultsTitle.textContent = data.title || `Your Custom Trip to ${formData.destination}`;
-    resultsSubtitle.textContent = data.subtitle
-      || `${formData.days} Days • ${formData.travelers} Traveler${formData.travelers > 1 ? 's' : ''} • Styles: ${styleStr}`;
+    resultsBadge.textContent = data.badge || data.status || data.label || 'Itinerary Ready';
+    
+    const dest = data.destination || data.location || formData.destination;
+    resultsTitle.textContent = data.title || data.trip_title || data.name || `Your Custom Trip to ${dest}`;
+    
+    const travelersCountVal = data.travelers || data.travelers_count || formData.travelers;
+    const daysCountVal = data.days || data.duration || data.days_count || formData.days;
+    resultsSubtitle.textContent = data.subtitle || data.trip_subtitle
+      || `${daysCountVal} Days • ${travelersCountVal} Traveler${travelersCountVal > 1 ? 's' : ''} • Styles: ${styleStr}`;
+
+    const overviewText = data.overview || data.description || data.summary || data.overview_text || data.trip_overview || '';
+    if (resultsOverview) {
+      if (overviewText) {
+        resultsOverview.textContent = overviewText;
+        resultsOverview.style.display = 'block';
+      } else {
+        resultsOverview.textContent = '';
+        resultsOverview.style.display = 'none';
+      }
+    }
 
     renderItinerary(data, formData);
     renderBudget(data, formData.budget);
@@ -265,39 +282,61 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderItinerary(data, formData) {
     itineraryContainer.innerHTML = '';
-    const days = data.itinerary || data.itineraryDays || data.days_plan;
+    const days = data.itinerary || data.itineraryDays || data.days_plan || data.days;
 
     if (Array.isArray(days) && days.length > 0) {
       days.forEach((dayData, index) => {
-      const dayEl = document.createElement('div');
-      dayEl.className = 'itinerary-day';
-      dayEl.innerHTML = `
-        <div class="day-header">
-            <span class="badge badge-primary">Day ${dayData.day || index + 1}</span>
-          <h3>Daily Exploration</h3>
-        </div>
-        <div class="day-timeline">
-          <div class="timeline-item">
-            <div class="timeline-marker"></div>
-            <div class="timeline-time">Morning</div>
-            <div class="timeline-title">Morning Adventure</div>
-              <div class="timeline-desc">${escapeHtml(dayData.morning || dayData.am || '')}</div>
+        const dayEl = document.createElement('div');
+        dayEl.className = 'itinerary-day';
+        
+        const dayNum = dayData.day || dayData.day_number || index + 1;
+        const dayTitle = dayData.title || dayData.theme || dayData.heading || dayData.summary || 'Daily Exploration';
+
+        // Extract morning activity details dynamically
+        const morningTitle = dayData.morning_title || dayData.morningTitle || dayData.am_title || 'Morning Adventure';
+        const morningDesc = typeof dayData.morning === 'object' 
+          ? (dayData.morning.desc || dayData.morning.description || dayData.morning.activity || '') 
+          : (dayData.morning || dayData.am || dayData.morning_activity || dayData.morningActivity || '');
+
+        // Extract afternoon activity details dynamically
+        const afternoonTitle = dayData.afternoon_title || dayData.afternoonTitle || dayData.pm_title || 'Midday Exploration';
+        const afternoonDesc = typeof dayData.afternoon === 'object' 
+          ? (dayData.afternoon.desc || dayData.afternoon.description || dayData.afternoon.activity || '') 
+          : (dayData.afternoon || dayData.pm || dayData.afternoon_activity || dayData.afternoonActivity || '');
+
+        // Extract evening activity details dynamically
+        const eveningTitle = dayData.evening_title || dayData.eveningTitle || dayData.night_title || 'Evening & Dinner';
+        const eveningDesc = typeof dayData.evening === 'object' 
+          ? (dayData.evening.desc || dayData.evening.description || dayData.evening.activity || '') 
+          : (dayData.evening || dayData.night || dayData.evening_activity || dayData.eveningActivity || '');
+
+        dayEl.innerHTML = `
+          <div class="day-header">
+            <span class="badge badge-primary">Day ${dayNum}</span>
+            <h3>${escapeHtml(dayTitle)}</h3>
           </div>
-          <div class="timeline-item">
-            <div class="timeline-marker"></div>
-            <div class="timeline-time">Afternoon</div>
-            <div class="timeline-title">Midday Exploration</div>
-              <div class="timeline-desc">${escapeHtml(dayData.afternoon || dayData.pm || '')}</div>
+          <div class="day-timeline">
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-time">Morning</div>
+              <div class="timeline-title">${escapeHtml(morningTitle)}</div>
+              <div class="timeline-desc">${escapeHtml(morningDesc)}</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-time">Afternoon</div>
+              <div class="timeline-title">${escapeHtml(afternoonTitle)}</div>
+              <div class="timeline-desc">${escapeHtml(afternoonDesc)}</div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-marker"></div>
+              <div class="timeline-time">Evening</div>
+              <div class="timeline-title">${escapeHtml(eveningTitle)}</div>
+              <div class="timeline-desc">${escapeHtml(eveningDesc)}</div>
+            </div>
           </div>
-          <div class="timeline-item">
-            <div class="timeline-marker"></div>
-            <div class="timeline-time">Evening</div>
-            <div class="timeline-title">Evening & Dinner</div>
-              <div class="timeline-desc">${escapeHtml(dayData.evening || dayData.night || '')}</div>
-          </div>
-        </div>
-      `;
-      itineraryContainer.appendChild(dayEl);
+        `;
+        itineraryContainer.appendChild(dayEl);
       });
       return;
     }
@@ -308,47 +347,85 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     itineraryContainer.innerHTML = `
       <div class="itinerary-day">
-          <div class="day-header">
+        <div class="day-header">
           <span class="badge badge-primary">Plan</span>
           <h3>TravelMind Plan</h3>
-          </div>
-          <div class="day-timeline">
-            <div class="timeline-item">
-              <div class="timeline-marker"></div>
+        </div>
+        <div class="day-timeline">
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
             <div class="timeline-desc" style="white-space: pre-wrap;">${escapeHtml(String(fallbackText))}</div>
-            </div>
-            </div>
           </div>
-        `;
-    }
+        </div>
+      </div>
+    `;
+  }
 
   function renderBudget(data, fallbackBudget) {
     budgetListContainer.innerHTML = '';
-    const breakdown = data.budget || data.budgetBreakdown;
+    
+    let breakdown = data.budgetBreakdown || data.expenses || data.cost_breakdown || data.cost || data.budget;
+    const total = data.totalBudget || data.budgetTotal || data.total_cost || (data.budget && data.budget.total) || fallbackBudget;
+    
+    if (typeof breakdown === 'number' || typeof breakdown === 'string') {
+      breakdown = null;
+    }
 
-    if (breakdown && typeof breakdown === 'object') {
+    let displayTotal = '';
+    if (typeof total === 'number') {
+      displayTotal = `₹${total.toLocaleString('en-IN')}`;
+    } else if (typeof total === 'string') {
+      displayTotal = total.trim().startsWith('₹') ? total.trim() : `₹${total.trim()}`;
+    } else {
+      displayTotal = `₹0`;
+    }
+    budgetTotalCost.textContent = displayTotal;
+
+    const parsedTotal = total ? (typeof total === 'number' ? total : parseInt(String(total).replace(/[^\d]/g, ''), 10)) : fallbackBudget;
+
+    if (Array.isArray(breakdown) && breakdown.length > 0) {
+      breakdown.forEach(item => {
+        const label = item.category || item.label || item.name || item.expense || 'Expense';
+        const value = item.cost || item.amount || item.value || item.price || 0;
+        const amount = typeof value === 'number' ? value : parseInt(String(value).replace(/[^\d]/g, ''), 10);
+        const pct = parsedTotal ? Math.min(100, Math.round((amount / parsedTotal) * 100)) : 0;
+        
+        const divItem = document.createElement('div');
+        divItem.className = 'budget-item';
+        divItem.innerHTML = `
+          <div class="budget-label-row">
+              <span class="budget-cat">${escapeHtml(label)}</span>
+              <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
+          </div>
+          <div class="progress-track">
+              <div class="progress-bar" data-value="${pct}%"></div>
+          </div>
+        `;
+        budgetListContainer.appendChild(divItem);
+      });
+    } else if (breakdown && typeof breakdown === 'object' && Object.keys(breakdown).length > 0) {
       Object.entries(breakdown).forEach(([label, value]) => {
-        const amount = typeof value === 'number' ? value : parseInt(value, 10);
-        const pct = fallbackBudget ? Math.round((amount / fallbackBudget) * 100) : 0;
-        const item = document.createElement('div');
-        item.className = 'budget-item';
-        item.innerHTML = `
-        <div class="budget-label-row">
-            <span class="budget-cat">${escapeHtml(label)}</span>
-            <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
-        </div>
-        <div class="progress-track">
-            <div class="progress-bar" data-value="${pct}%"></div>
-        </div>
-      `;
-        budgetListContainer.appendChild(item);
+        if (label.toLowerCase() === 'total') return;
+
+        const amount = typeof value === 'number' ? value : parseInt(String(value).replace(/[^\d]/g, ''), 10);
+        const pct = parsedTotal ? Math.min(100, Math.round((amount / parsedTotal) * 100)) : 0;
+        
+        const divItem = document.createElement('div');
+        divItem.className = 'budget-item';
+        divItem.innerHTML = `
+          <div class="budget-label-row">
+              <span class="budget-cat">${escapeHtml(label)}</span>
+              <span class="budget-val">₹${amount.toLocaleString('en-IN')} (${pct}%)</span>
+          </div>
+          <div class="progress-track">
+              <div class="progress-bar" data-value="${pct}%"></div>
+          </div>
+        `;
+        budgetListContainer.appendChild(divItem);
       });
     } else {
       budgetListContainer.innerHTML = `<p class="card-desc">Budget breakdown will appear here after a trip is generated.</p>`;
     }
-
-    const total = data.totalBudget || data.budgetTotal || fallbackBudget;
-    budgetTotalCost.textContent = `₹${Number(total).toLocaleString('en-IN')}`;
 
     setTimeout(() => {
       document.querySelectorAll('.progress-bar').forEach(bar => {
@@ -359,7 +436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderWeather(data) {
     weatherListContainer.innerHTML = '';
-    const weather = data.weather;
+    const weather = data.weather || data.weatherForecast || data.forecast || data.weather_forecast || data.weather_details;
     if (!Array.isArray(weather) || weather.length === 0) {
       weatherListContainer.innerHTML = `<p class="card-desc">Weather details will appear here after a trip is generated.</p>`;
       return;
@@ -367,11 +444,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     weather.forEach(w => {
       const card = document.createElement('div');
       card.className = 'weather-day-card';
+      const dayName = w.day || w.date || w.name || w.day_name || 'Day';
+      const temp = w.temp || w.temperature || w.avg_temp || w.temp_range || '';
+      const condition = w.cond || w.condition || w.weather || w.sky || '';
+      const icon = w.icon || w.weather_icon || 'cloud-sun';
+      
       card.innerHTML = `
-        <div class="weather-name">${escapeHtml(w.day || 'Day')}</div>
-        <div class="weather-icon"><i data-lucide="${w.icon || 'cloud-sun'}"></i></div>
-        <div class="weather-temp">${escapeHtml(w.temp || '')}</div>
-        <div class="weather-desc">${escapeHtml(w.cond || w.condition || '')}</div>
+        <div class="weather-name">${escapeHtml(dayName)}</div>
+        <div class="weather-icon"><i data-lucide="${icon}"></i></div>
+        <div class="weather-temp">${escapeHtml(temp)}</div>
+        <div class="weather-desc">${escapeHtml(condition)}</div>
       `;
       weatherListContainer.appendChild(card);
     });
@@ -379,7 +461,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderPacking(data) {
     packingListContainer.innerHTML = '';
-    const packing = data.packing || data.packingList;
+    const packing = data.packing || data.packingList || data.checklist || data.packing_list || data.packing_checklist || data.items_to_pack;
     if (!Array.isArray(packing) || packing.length === 0) {
       packingListContainer.innerHTML = `<p class="card-desc">Packing checklist will appear here after a trip is generated.</p>`;
       return;
@@ -387,9 +469,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     packing.forEach((item, idx) => {
       const label = document.createElement('label');
       label.className = 'packing-item';
+      const name = typeof item === 'string' ? item : (item.name || item.item || item.title || '');
       label.innerHTML = `
         <input type="checkbox" id="pack-chk-${idx}">
-        <span>${escapeHtml(typeof item === 'string' ? item : item.name || '')}</span>
+        <span>${escapeHtml(name)}</span>
       `;
       packingListContainer.appendChild(label);
     });
@@ -397,7 +480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderAttractions(data) {
     attractionsGrid.innerHTML = '';
-    const attractions = data.attractions;
+    const attractions = data.attractions || data.recommendedAttractions || data.places_to_visit || data.sightseeing || data.points_of_interest;
     if (!Array.isArray(attractions) || attractions.length === 0) {
       attractionsGrid.innerHTML = `<p class="card-desc">Attraction recommendations will appear here after a trip is generated.</p>`;
       return;
@@ -405,10 +488,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     attractions.forEach(attr => {
       const card = document.createElement('div');
       card.className = 'glass-panel attraction-card';
+      
+      const imgUrl = attr.image || attr.image_url || attr.imageUrl || attr.photo || '';
+      const imgHtml = imgUrl 
+        ? `<div class="card-img-wrapper"><img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(attr.name || 'Attraction')}"></div>`
+        : '';
+        
+      const ratingVal = attr.rating || attr.stars || '';
+      const reviewsVal = attr.reviews || attr.reviews_count || '';
+      const ratingHtml = ratingVal
+        ? `<div class="card-rating-row">
+            <div class="card-rating">
+              <i data-lucide="star" style="width: 14px; height: 14px; fill: #fbbf24; color: #fbbf24;"></i> 
+              <span>${escapeHtml(String(ratingVal))}</span>
+              ${reviewsVal ? `<span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${escapeHtml(String(reviewsVal))})</span>` : ''}
+            </div>
+           </div>`
+        : '';
+
       card.innerHTML = `
+        ${imgHtml}
         <div class="card-content">
-          <h4 class="card-title">${escapeHtml(attr.name || 'Attraction')}</h4>
-          <p class="card-desc">${escapeHtml(attr.desc || attr.description || '')}</p>
+          ${ratingHtml}
+          <h4 class="card-title">${escapeHtml(attr.name || attr.title || attr.attraction_name || 'Attraction')}</h4>
+          <p class="card-desc">${escapeHtml(attr.desc || attr.description || attr.info || '')}</p>
         </div>
       `;
       attractionsGrid.appendChild(card);
@@ -417,7 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderHotels(data) {
     hotelsGrid.innerHTML = '';
-    const hotels = data.hotels;
+    const hotels = data.hotels || data.recommendedStays || data.accommodations || data.stays;
     if (!Array.isArray(hotels) || hotels.length === 0) {
       hotelsGrid.innerHTML = `<p class="card-desc">Hotel recommendations will appear here after a trip is generated.</p>`;
       return;
@@ -425,10 +528,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     hotels.forEach(hotel => {
       const card = document.createElement('div');
       card.className = 'glass-panel hotel-card';
+
+      const imgUrl = hotel.image || hotel.image_url || hotel.imageUrl || hotel.photo || '';
+      const imgHtml = imgUrl 
+        ? `<div class="card-img-wrapper"><img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(hotel.name || 'Hotel')}"></div>`
+        : '';
+        
+      const ratingVal = hotel.rating || hotel.stars || '';
+      const reviewsVal = hotel.reviews || hotel.reviews_count || '';
+      const ratingHtml = ratingVal
+        ? `<div class="card-rating-row">
+            <div class="card-rating">
+              <i data-lucide="star" style="width: 14px; height: 14px; fill: #fbbf24; color: #fbbf24;"></i> 
+              <span>${escapeHtml(String(ratingVal))}</span>
+              ${reviewsVal ? `<span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal; margin-left: 4px;">(${escapeHtml(String(reviewsVal))})</span>` : ''}
+            </div>
+           </div>`
+        : '';
+
+      const priceVal = hotel.price || hotel.cost || hotel.price_per_night || '';
+      const descVal = hotel.desc || hotel.description || hotel.info || '';
+
       card.innerHTML = `
+        ${imgHtml}
         <div class="card-content">
-          <h4 class="card-title">${escapeHtml(hotel.name || 'Hotel')}</h4>
-          <p class="card-desc">${escapeHtml(hotel.price || hotel.desc || '')}</p>
+          ${ratingHtml}
+          <h4 class="card-title">${escapeHtml(hotel.name || hotel.hotel_name || hotel.title || 'Hotel')}</h4>
+          <p class="card-desc">${escapeHtml(descVal)}</p>
+          ${priceVal ? `<div class="hotel-price">${escapeHtml(priceVal)}</div>` : ''}
         </div>
       `;
       hotelsGrid.appendChild(card);
@@ -437,7 +564,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderFoods(data) {
     foodsGridContainer.innerHTML = '';
-    const foods = data.foods;
+    const foods = data.foods || data.localCuisine || data.food_recommendations || data.dishes || data.local_foods;
     if (!Array.isArray(foods) || foods.length === 0) {
       foodsGridContainer.innerHTML = `<p class="card-desc">Food recommendations will appear here after a trip is generated.</p>`;
       return;
@@ -445,10 +572,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     foods.forEach(food => {
       const card = document.createElement('div');
       card.className = 'glass-panel food-item-card';
+      
+      const emojiVal = food.emoji || food.icon || '🍽️';
+      
       card.innerHTML = `
-        <span class="food-emoji">${food.emoji || '🍽️'}</span>
-        <h4 class="food-title">${escapeHtml(food.name || 'Local Dish')}</h4>
-        <p class="food-desc">${escapeHtml(food.desc || food.description || '')}</p>
+        <span class="food-emoji">${escapeHtml(emojiVal)}</span>
+        <h4 class="food-title">${escapeHtml(food.name || food.dish_name || food.title || 'Local Dish')}</h4>
+        <p class="food-desc">${escapeHtml(food.desc || food.description || food.info || '')}</p>
       `;
       foodsGridContainer.appendChild(card);
     });
@@ -456,7 +586,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderTransport(data) {
     transportListContainer.innerHTML = '';
-    const transport = data.transport;
+    const transport = data.transport || data.transportation || data.travel_modes || data.transport_guide;
     if (!Array.isArray(transport) || transport.length === 0) {
       transportListContainer.innerHTML = `<p class="card-desc">Transport guide will appear here after a trip is generated.</p>`;
       return;
@@ -464,9 +594,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     transport.forEach(t => {
       const item = document.createElement('div');
       item.className = 'transport-item';
+      const typeVal = t.type || t.name || t.mode || 'Transport';
+      const noteVal = t.efficiency || t.note || t.details || t.description || 'Recommended';
       item.innerHTML = `
-        <div class="transport-label"><span>${escapeHtml(t.type || t.name || 'Transport')}</span></div>
-        <span class="badge badge-primary">${escapeHtml(t.efficiency || t.note || 'Recommended')}</span>
+        <div class="transport-label"><span>${escapeHtml(typeVal)}</span></div>
+        <span class="badge badge-primary">${escapeHtml(noteVal)}</span>
       `;
       transportListContainer.appendChild(item);
     });
@@ -474,7 +606,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderSafety(data) {
     safetyListContainer.innerHTML = '';
-    const safety = data.safety || data.safetyTips;
+    const safety = data.safety || data.safetyTips || data.safety_tips || data.tips || data.advice;
     if (!Array.isArray(safety) || safety.length === 0) {
       safetyListContainer.innerHTML = `<p class="card-desc">Safety tips will appear here after a trip is generated.</p>`;
       return;
@@ -482,11 +614,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     safety.forEach(tip => {
       const item = document.createElement('div');
       item.className = 'safety-item';
+      const iconVal = tip.icon || tip.emoji || '💡';
+      const titleVal = tip.title || tip.name || tip.heading || 'Tip';
+      const descVal = tip.desc || tip.description || tip.detail || '';
       item.innerHTML = `
-        <span class="safety-icon">${tip.icon || '💡'}</span>
+        <span class="safety-icon">${escapeHtml(iconVal)}</span>
         <div class="safety-item-content">
-          <h4 class="safety-item-title">${escapeHtml(tip.title || 'Tip')}</h4>
-          <p class="safety-item-desc">${escapeHtml(tip.desc || tip.description || '')}</p>
+          <h4 class="safety-item-title">${escapeHtml(titleVal)}</h4>
+          <p class="safety-item-desc">${escapeHtml(descVal)}</p>
         </div>
       `;
       safetyListContainer.appendChild(item);
