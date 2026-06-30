@@ -2,139 +2,101 @@
  * TravelMind - Frontend Prototype Logic
  */
 
-let backendConfig = null;
+function buildLocalTravelPlan(data) {
+  const destination = data.destination;
+  const interests = data.interests || 'sightseeing';
+  const preferences = data.preferences || 'balanced pace';
+  const budget = Number(data.budget || 0);
 
-async function loadBackendConfig() {
-  const response = await fetch('/backend.json');
-  if (!response.ok) {
-    throw new Error('Could not load backend.json');
-  }
-  backendConfig = await response.json();
-  return backendConfig;
-}
+  const itinerary = Array.from({ length: data.days }, (_, index) => ({
+    day: index + 1,
+    morning: `Start with a relaxed visit to a signature area of ${destination}, focused on ${interests}.`,
+    afternoon: `Explore a landmark, market, museum, or scenic neighborhood in ${destination}.`,
+    evening: `Wind down with dinner and an easy local experience shaped around ${preferences}.`
+  }));
 
-function shouldUseN8nProxy() {
-  const api = backendConfig.api;
-  const proxyHosts = api.proxyHosts || ['localhost', '127.0.0.1'];
-
-  return (
-    window.location.protocol.startsWith('http') &&
-    api.proxyPrefix &&
-    proxyHosts.includes(window.location.hostname)
-  );
-}
-
-function getN8nWebhookUrl(webhookPath) {
-  const api = backendConfig.api;
-
-  if (shouldUseN8nProxy()) {
-    return `${api.proxyPrefix}${webhookPath}`;
-  }
-  return `${api.baseUrl}${webhookPath}`;
-}
-
-function formatN8nError(result, status) {
-  const message = result?.message || result?.error || `n8n webhook failed (${status})`;
-  const hint = result?.hint ? ` ${result.hint}` : '';
-  return `${message}${hint}`;
-}
-
-function createN8nHeaders(headers) {
-  return Object.fromEntries(
-    Object.entries(headers || {}).filter(([, value]) => value !== undefined && value !== null)
-  );
-}
-
-function isN8nWebhookMissing(result, response) {
-  const message = String(result?.message || '').toLowerCase();
-  return (response?.status === 404 || Number(result?.code) === 404) && message.includes('webhook');
-}
-
-async function callN8nWebhook(webhookUrl, requestBody, api, messages) {
-  let response;
-  try {
-    console.log('[n8n] request:', webhookUrl, requestBody);
-    response = await fetch(webhookUrl, {
-      method: api.method,
-      headers: createN8nHeaders(api.headers),
-      body: JSON.stringify(requestBody)
-    });
-  } catch (networkErr) {
-    throw new Error(`${messages.networkError} (${networkErr.message})`);
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  const isJson = contentType.includes('application/json');
-
-  if (!isJson) {
-    const text = await response.text();
-    if (text.includes('ERR_NGROK') || text.toLowerCase().includes('offline')) {
-      throw new Error(messages.ngrokOffline);
-    }
-    if (text.toLowerCase().includes('cors')) {
-      throw new Error(messages.corsError);
-    }
-    throw new Error(`Unexpected response from n8n (${response.status}). Check that Vite proxies to n8n and the workflow is active.`);
-  }
-
-  const result = await response.json();
-
-  if (!response.ok || Number(result?.code) >= 400) {
-    const error = new Error(formatN8nError(result, response.status));
-    error.result = result;
-    error.response = response;
-    throw error;
-  }
-
-  return result;
-}
-
-async function getTravelPlan(data) {
-  if (!backendConfig) {
-    await loadBackendConfig();
-  }
-
-  const { api, messages } = backendConfig;
-
-  if (window.location.protocol === 'file:') {
-    throw new Error(messages.fileProtocolError);
-  }
-
-  const requestBody = {
-    apiKey: api.apiKey,
-    destination: data.destination,
-    budget: data.budget,
-    days: data.days,
-    interests: data.interests,
-    startDate: data.startDate,
-    endDate: data.endDate,
-    travelers: data.travelers,
-    travelStyles: data.travelStyles,
-    preferences: data.preferences
-  };
-
-  const webhookUrl = getN8nWebhookUrl(api.webhookPath);
-  try {
-    const result = await callN8nWebhook(webhookUrl, requestBody, api, messages);
-    console.log('[n8n] response:', result);
-    return result;
-  } catch (err) {
-    if (api.testWebhookPath && isN8nWebhookMissing(err.result, err.response)) {
-      const testWebhookUrl = getN8nWebhookUrl(api.testWebhookPath);
-      console.warn('[n8n] production webhook missing, trying test webhook:', testWebhookUrl);
-      try {
-        const testResult = await callN8nWebhook(testWebhookUrl, requestBody, api, messages);
-        console.log('[n8n] test response:', testResult);
-        return testResult;
-      } catch (testErr) {
-        if (isN8nWebhookMissing(testErr.result, testErr.response)) {
-          throw new Error('n8n is reachable, but the TravelMind webhook is not registered. Activate the workflow in n8n, or click "Execute workflow" before testing.');
-        }
-        throw testErr;
+  return {
+    badge: 'Itinerary Ready',
+    title: `Your Custom Trip to ${destination}`,
+    totalBudget: budget,
+    itinerary,
+    budget: {
+      stays: Math.round(budget * 0.35),
+      food: Math.round(budget * 0.2),
+      transport: Math.round(budget * 0.2),
+      activities: Math.round(budget * 0.2),
+      buffer: Math.round(budget * 0.05)
+    },
+    weather: [
+      {
+        day: 'Trip period',
+        icon: 'cloud-sun',
+        temp: 'Check forecast',
+        condition: 'Pack for the local season'
       }
-    }
-    throw err;
-  }
+    ],
+    packing: [
+      'Comfortable shoes',
+      'Travel documents',
+      'Power bank',
+      'Weather-appropriate clothing',
+      'Reusable water bottle'
+    ],
+    attractions: [
+      {
+        name: `${destination} highlights`,
+        desc: `A flexible mix of iconic sights and local finds based on ${interests}.`
+      },
+      {
+        name: 'Local culture stop',
+        desc: 'Add a museum, historic district, market, or neighborhood walk.'
+      }
+    ],
+    hotels: [
+      {
+        name: 'Central stay option',
+        price: 'Prioritize transit access, reviews, and flexible cancellation.'
+      },
+      {
+        name: 'Budget-friendly stay',
+        price: 'Compare commute time against nightly price before booking.'
+      }
+    ],
+    foods: [
+      {
+        emoji: '🍽️',
+        name: 'Local specialty',
+        desc: `Try one well-known dish or dining experience from ${destination}.`
+      },
+      {
+        emoji: '☕',
+        name: 'Cafe or street food stop',
+        desc: 'Use this as a relaxed break between sightseeing blocks.'
+      }
+    ],
+    transport: [
+      {
+        type: 'Local transit',
+        efficiency: 'Best for regular city travel'
+      },
+      {
+        type: 'Taxi or rideshare',
+        efficiency: 'Best for late evenings or luggage'
+      }
+    ],
+    safetyTips: [
+      {
+        icon: '💡',
+        title: 'Keep essentials secure',
+        desc: 'Carry document copies and keep valuables low-profile.'
+      },
+      {
+        icon: '📍',
+        title: 'Share your route',
+        desc: 'Keep someone informed about your stay and day plans.'
+      }
+    ]
+  };
 }
 
 function normalizeN8nResponse(raw) {
@@ -150,13 +112,6 @@ function escapeHtml(text) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    await loadBackendConfig();
-    console.log('[backend] loaded backend.json');
-  } catch (err) {
-    console.error('[backend] failed to load backend.json:', err);
-  }
-
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
   }
@@ -337,14 +292,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     generateBtn.disabled = isLoading;
     plannerForm.closest('.planner-card').style.display = isLoading ? 'none' : 'block';
     loaderOverlay.style.display = isLoading ? 'flex' : 'none';
-    loaderMsg.textContent = message || (isLoading ? "Sending your trip to n8n..." : "Finding the best attractions...");
+    loaderMsg.textContent = message || (isLoading ? "Generating your trip..." : "Finding the best attractions...");
     if (isLoading) {
       loaderOverlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 
-  function showPlannerResults(formData, n8nResponse) {
-    const data = normalizeN8nResponse(n8nResponse);
+  function showPlannerResults(formData, plannerResponse) {
+    const data = normalizeN8nResponse(plannerResponse);
     const styleStr = formData.travelStyles.length > 0 ? formData.travelStyles.join(', ') : "General";
 
     resultsBadge.textContent = data.badge || 'Itinerary Ready';
@@ -411,7 +366,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const planText = data.plan || data.message || data.output || data.itineraryText;
     const fallbackText = planText
-      || `Your ${formData.days}-day trip to ${formData.destination} was sent to n8n. Check the browser console for the full response while your workflow finishes processing.`;
+      || `Your ${formData.days}-day trip to ${formData.destination} is ready.`;
 
     itineraryContainer.innerHTML = `
       <div class="itinerary-day">
@@ -451,7 +406,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         budgetListContainer.appendChild(item);
       });
     } else {
-      budgetListContainer.innerHTML = `<p class="card-desc">Budget breakdown will appear here once n8n returns structured data.</p>`;
+      budgetListContainer.innerHTML = `<p class="card-desc">Budget breakdown will appear here after a trip is generated.</p>`;
     }
 
     const total = data.totalBudget || data.budgetTotal || fallbackBudget;
@@ -468,7 +423,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     weatherListContainer.innerHTML = '';
     const weather = data.weather;
     if (!Array.isArray(weather) || weather.length === 0) {
-      weatherListContainer.innerHTML = `<p class="card-desc">Weather details will appear here from n8n.</p>`;
+      weatherListContainer.innerHTML = `<p class="card-desc">Weather details will appear here after a trip is generated.</p>`;
       return;
     }
     weather.forEach(w => {
@@ -488,7 +443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     packingListContainer.innerHTML = '';
     const packing = data.packing || data.packingList;
     if (!Array.isArray(packing) || packing.length === 0) {
-      packingListContainer.innerHTML = `<p class="card-desc">Packing checklist will appear here from n8n.</p>`;
+      packingListContainer.innerHTML = `<p class="card-desc">Packing checklist will appear here after a trip is generated.</p>`;
       return;
     }
     packing.forEach((item, idx) => {
@@ -506,7 +461,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     attractionsGrid.innerHTML = '';
     const attractions = data.attractions;
     if (!Array.isArray(attractions) || attractions.length === 0) {
-      attractionsGrid.innerHTML = `<p class="card-desc">Attraction recommendations will appear here from n8n.</p>`;
+      attractionsGrid.innerHTML = `<p class="card-desc">Attraction recommendations will appear here after a trip is generated.</p>`;
       return;
     }
     attractions.forEach(attr => {
@@ -526,7 +481,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     hotelsGrid.innerHTML = '';
     const hotels = data.hotels;
     if (!Array.isArray(hotels) || hotels.length === 0) {
-      hotelsGrid.innerHTML = `<p class="card-desc">Hotel recommendations will appear here from n8n.</p>`;
+      hotelsGrid.innerHTML = `<p class="card-desc">Hotel recommendations will appear here after a trip is generated.</p>`;
       return;
     }
     hotels.forEach(hotel => {
@@ -546,7 +501,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     foodsGridContainer.innerHTML = '';
     const foods = data.foods;
     if (!Array.isArray(foods) || foods.length === 0) {
-      foodsGridContainer.innerHTML = `<p class="card-desc">Food recommendations will appear here from n8n.</p>`;
+      foodsGridContainer.innerHTML = `<p class="card-desc">Food recommendations will appear here after a trip is generated.</p>`;
       return;
     }
     foods.forEach(food => {
@@ -565,7 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     transportListContainer.innerHTML = '';
     const transport = data.transport;
     if (!Array.isArray(transport) || transport.length === 0) {
-      transportListContainer.innerHTML = `<p class="card-desc">Transport guide will appear here from n8n.</p>`;
+      transportListContainer.innerHTML = `<p class="card-desc">Transport guide will appear here after a trip is generated.</p>`;
       return;
     }
     transport.forEach(t => {
@@ -583,7 +538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     safetyListContainer.innerHTML = '';
     const safety = data.safety || data.safetyTips;
     if (!Array.isArray(safety) || safety.length === 0) {
-      safetyListContainer.innerHTML = `<p class="card-desc">Safety tips will appear here from n8n.</p>`;
+      safetyListContainer.innerHTML = `<p class="card-desc">Safety tips will appear here after a trip is generated.</p>`;
       return;
     }
     safety.forEach(tip => {
@@ -636,16 +591,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       preferences: preferencesVal
     };
 
-    setPlannerLoadingState(true, "Generating your trip with n8n...");
+    setPlannerLoadingState(true, "Generating your trip...");
 
     try {
-      const n8nResponse = await getTravelPlan(formData);
+      const travelPlan = buildLocalTravelPlan(formData);
       setPlannerLoadingState(false);
-      showPlannerResults(formData, n8nResponse);
-      showToast(backendConfig?.messages?.success || "Trip generated successfully via n8n!");
+      showPlannerResults(formData, travelPlan);
+      showToast("Trip generated successfully!");
     } catch (err) {
       setPlannerLoadingState(false);
-      console.error('[n8n] Planner webhook failed:', err);
+      console.error('[planner] Trip generation failed:', err);
       showToast(err.message);
     }
   }

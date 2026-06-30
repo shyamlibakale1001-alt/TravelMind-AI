@@ -20,7 +20,7 @@ A modern, responsive frontend for a smart travel planning web app. Built using H
 ## 📌 Note
 
 This is a **frontend-only project**.  
-Backend integration (AI, APIs, automation workflows) is connected using n8n workflow.
+Trip results are generated locally in the browser for prototype/demo use.
 
 ## 📈 Future Improvements
 
