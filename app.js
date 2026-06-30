@@ -5,9 +5,42 @@
 const WEBHOOK_URL = "https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind/plan";
 
 function normalizeN8nResponse(raw) {
-  if (Array.isArray(raw) && raw[0]?.json) return raw[0].json;
-  if (Array.isArray(raw) && raw[0]) return raw[0];
-  return raw || {};
+  let data = raw;
+  if (Array.isArray(raw) && raw[0]?.json) {
+    data = raw[0].json;
+  } else if (Array.isArray(raw) && raw[0]) {
+    data = raw[0];
+  }
+
+  if (!data) return {};
+
+  // Check if response contains a "text" field that has a markdown code block containing JSON
+  if (data.text && typeof data.text === 'string') {
+    const trimmedText = data.text.trim();
+    // Match standard markdown code block: ```json ... ``` or ``` ... ```
+    const match = trimmedText.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    
+    if (match) {
+      try {
+        return JSON.parse(match[1].trim());
+      } catch (err) {
+        console.error('[normalizeN8nResponse] Failed to parse JSON from markdown code block:', err);
+        throw new Error(`Failed to parse travel plan: ${err.message}`);
+      }
+    }
+
+    // Fallback: If it's a JSON string but doesn't have markdown code fences
+    if (trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
+      try {
+        return JSON.parse(trimmedText);
+      } catch (err) {
+        console.error('[normalizeN8nResponse] Failed to parse JSON from text field:', err);
+        throw new Error(`Failed to parse travel plan: ${err.message}`);
+      }
+    }
+  }
+
+  return data;
 }
 
 function escapeHtml(text) {
