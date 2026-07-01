@@ -7,8 +7,8 @@
   <meta name="description"
     content="Plan personalized trips in seconds based on your budget, travel style, interests, and duration with TravelMind AI.">
   <title>TravelMind AI - Craft Your Perfect Journey</title>
-  <script type="module" crossorigin src="/assets/index-Bz1hJUjM.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-DrRpuoVf.css">
+  <script type="module" crossorigin src="/assets/index-CnXCbk_E.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CbaQXY4g.css">
 </head>
 
 <body>
@@ -28,9 +28,6 @@
         <li><a href="#features" class="nav-link" id="link-features">Features</a></li>
       </ul>
       <div class="nav-actions">
-        <button class="theme-toggle" id="api-key-btn" title="Configure AI Model (Gemini Key)" aria-label="Configure AI Model">
-          <i data-lucide="key"></i>
-        </button>
         <button class="theme-toggle" id="theme-toggle" aria-label="Toggle Dark Mode">
           <i data-lucide="moon" class="moon-icon"></i>
           <i data-lucide="sun" class="sun-icon"></i>
@@ -494,32 +491,6 @@
     </div>
   </footer>
 
-  <!-- API Key Modal -->
-  <div class="modal-overlay" id="api-modal">
-    <div class="glass-panel modal-card">
-      <div class="modal-header">
-        <h3><i data-lucide="brain-circuit" class="gradient-text"></i> AI Configuration</h3>
-        <button class="modal-close" id="api-modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>To plan trips directly via Gemini AI, enter your Google Gemini API Key. Your key is stored securely in your browser's localStorage.</p>
-        <div class="form-group" style="margin-top: 15px;">
-          <label for="api-key-input"><i data-lucide="key"></i> Gemini API Key</label>
-          <div class="input-wrapper" style="margin-top: 8px;">
-            <i data-lucide="lock" class="input-icon"></i>
-            <input type="password" id="api-key-input" class="form-input" style="padding-left: 44px;" placeholder="AIzaSy...">
-          </div>
-        </div>
-        <div style="margin-top: 12px; font-size: 0.8rem; color: var(--text-secondary);">
-          Need a key? Get a free API key from <a href="https://aistudio.google.com/" target="_blank" style="color: var(--accent-color); text-decoration: underline;">Google AI Studio</a>.
-        </div>
-      </div>
-      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
-        <button class="chip-btn" id="api-modal-clear" style="padding: 10px 16px;">Remove Key</button>
-        <button class="premium-btn" id="api-modal-save" style="padding: 10px 20px; font-size: 0.95rem; border-radius: var(--radius-sm);">Save Settings</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Floating Back-to-Top Button -->
   <button id="back-to-top-btn" class="glass-panel back-to-top-btn" aria-label="Back to Top">

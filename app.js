@@ -2,7 +2,7 @@
  * TravelMind - Frontend Prototype Logic
  */
 
-const WEBHOOK_URL = "https://barista-sliced-outwit.ngrok-free.dev/webhook-test/travelmind/plan";
+const WEBHOOK_URL = "https://barista-sliced-outwit.ngrok-free.dev/webhook/travelmind/plan";
 
 function normalizeN8nResponse(raw) {
   console.log('[normalizeN8nResponse] Incoming raw payload:', raw);
@@ -111,13 +111,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     travelPlan: null
   };
 
-  // API Configuration Modal Elements
-  const apiKeyBtn = document.getElementById('api-key-btn');
-  const apiModal = document.getElementById('api-modal');
-  const apiModalClose = document.getElementById('api-modal-close');
-  const apiModalClear = document.getElementById('api-modal-clear');
-  const apiModalSave = document.getElementById('api-modal-save');
-  const apiKeyInput = document.getElementById('api-key-input');
   const weatherListContainer = document.getElementById('weather-list-container');
   const packingListContainer = document.getElementById('packing-list-container');
   const attractionsGrid = document.getElementById('attractions-grid');
@@ -188,43 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('theme', theme);
   });
 
-  // Handle API Key Configuration Modal
-  if (apiKeyBtn && apiModal) {
-    apiKeyBtn.addEventListener('click', () => {
-      const savedKey = localStorage.getItem('gemini_api_key') || '';
-      apiKeyInput.value = savedKey;
-      apiModal.classList.add('active');
-    });
 
-    apiModalClose.addEventListener('click', () => {
-      apiModal.classList.remove('active');
-    });
-
-    apiModalClear.addEventListener('click', () => {
-      localStorage.removeItem('gemini_api_key');
-      apiKeyInput.value = '';
-      showToast("API Key removed.");
-      apiModal.classList.remove('active');
-    });
-
-    apiModalSave.addEventListener('click', () => {
-      const keyVal = apiKeyInput.value.trim();
-      if (!keyVal) {
-        localStorage.removeItem('gemini_api_key');
-        showToast("API Key cleared.");
-      } else {
-        localStorage.setItem('gemini_api_key', keyVal);
-        showToast("Gemini API Key saved successfully!");
-      }
-      apiModal.classList.remove('active');
-    });
-
-    apiModal.addEventListener('click', (e) => {
-      if (e.target === apiModal) {
-        apiModal.classList.remove('active');
-      }
-    });
-  }
 
   menuToggle.addEventListener('click', () => {
     const isExpanded = menuToggle.getAttribute('aria-expanded') === 'true';
@@ -829,299 +786,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  async function generateTripWithGemini(formData, apiKey) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    console.log('[planner] Preparing prompt for Gemini AI model...');
-
-    const systemPrompt = `You are TravelMind AI, an expert travel planner. You must generate a highly detailed and realistic travel plan for a trip to ${formData.destination} based on the user's details.
-Your output MUST be a single, valid JSON object that matches the schema described below. Do not wrap the JSON in markdown code blocks or add any other text outside of the JSON object.
-
-JSON Schema:
-{
-  "badge": "Itinerary Ready",
-  "title": "Short catchy title for the trip",
-  "subtitle": "Overview description (e.g. 5 Days • 2 Travelers • Styles: Culture, Food)",
-  "overview": "A premium overview summary of the trip highlighting what the traveler will experience.",
-  "itinerary": [
-    {
-      "day": 1,
-      "title": "Day 1 theme or focus",
-      "morning_title": "Morning adventure title",
-      "morning": "Detailed description of morning activities, sights to see.",
-      "afternoon_title": "Afternoon exploration title",
-      "afternoon": "Detailed description of afternoon activities.",
-      "evening_title": "Evening & Dinner focus title",
-      "evening": "Detailed description of evening activities and dinner."
-    }
-  ],
-  "budget": {
-    "Accommodation": estimated cost as a number,
-    "Transport": estimated cost as a number,
-    "Food": estimated cost as a number,
-    "Sightseeing": estimated cost as a number,
-    "Miscellaneous": estimated cost as a number
-  },
-  "totalBudget": total estimated budget (must be a number close to or matching ${formData.budget}),
-  "weather": [
-    {
-      "day": "Day 1",
-      "temp": "Average temperature (e.g. 24°C)",
-      "cond": "Short condition description (e.g. Sunny)",
-      "icon": "Lucide weather icon name (choose one: sun, cloud, cloud-rain, cloud-lightning, cloud-snow, cloud-drizzle, wind, cloud-sun)"
-    }
-  ],
-  "packing": ["Packing item 1", "Packing item 2", "Packing item 3", "Packing item 4", "Packing item 5"],
-  "attractions": [
-    {
-      "name": "Attraction Name 1",
-      "desc": "Short description of the attraction.",
-      "rating": rating out of 5 (e.g. 4.8),
-      "reviews": review count (e.g. 1540),
-      "image": "Use a high quality unsplash image URL relevant to this attraction (or leave empty)"
-    }
-  ],
-  "hotels": [
-    {
-      "name": "Recommended Hotel 1",
-      "price": "Price per night (e.g. ₹5,000/night)",
-      "desc": "Short description of the hotel and its vibe.",
-      "rating": 4.4,
-      "reviews": 120,
-      "image": "Use a high quality unsplash image URL relevant to this hotel (or leave empty)"
-    }
-  ],
-  "foods": [
-    {
-      "emoji": "Emoji of the food item (e.g. 🍣)",
-      "name": "Local dish name",
-      "desc": "Description of the dish."
-    }
-  ],
-  "transport": [
-    {
-      "type": "Transit Mode (e.g. Subway)",
-      "efficiency": "Efficiency tag (e.g. High / Fast)"
-    }
-  ],
-  "safety": [
-    {
-      "icon": "Emoji or icon (e.g. 🛡️)",
-      "title": "Safety tip title",
-      "desc": "Safety advice details."
-    }
-  ]
-}
-
-User Details:
-Destination: ${formData.destination}
-Duration: ${formData.days} days (from ${formData.startDate} to ${formData.endDate})
-Budget limit: ₹${formData.budget}
-Number of travelers: ${formData.travelers}
-Travel styles: ${formData.travelStyles.join(', ')}
-Interests/Preferences: ${formData.preferences || 'General exploration'}`;
-
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              text: systemPrompt
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errorJson = await response.json().catch(() => ({}));
-      const errorMessage = errorJson.error?.message || `HTTP ${response.status} ${response.statusText}`;
-      throw new Error(`Gemini API Error: ${errorMessage}`);
-    }
-
-    const resJson = await response.json();
-    const textOutput = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!textOutput) {
-      throw new Error("No text content returned from Gemini API");
-    }
-
-    const parsedPlan = JSON.parse(textOutput.trim());
-    return parsedPlan;
-  }
-
-  function generateTripSimulated(formData) {
-    console.log('[planner] Running simulated fallback generation...');
-    const dest = formData.destination;
-    const days = formData.days;
-    const styles = formData.travelStyles.length > 0 ? formData.travelStyles : ['Adventure', 'Relaxation'];
-
-    const weatherConditions = ['Sunny', 'Partly Cloudy', 'Clear', 'Windy', 'Mild Rain'];
-    const weatherIcons = ['sun', 'cloud', 'cloud-sun', 'wind', 'cloud-drizzle'];
-    const weather = [];
-    for (let i = 1; i <= Math.min(days, 5); i++) {
-      const idx = Math.floor(Math.random() * weatherConditions.length);
-      weather.push({
-        day: `Day ${i}`,
-        temp: `${20 + Math.floor(Math.random() * 8)}°C`,
-        cond: weatherConditions[idx],
-        icon: weatherIcons[idx]
-      });
-    }
-
-    const itinerary = [];
-    const morningActs = [
-      "Guided historic walking tour of the old quarter.",
-      "Explore the local street market and enjoy a fresh breakfast.",
-      "Visit the iconic central cathedral and museum.",
-      "Take a scenic cable car ride to the mountain overlook.",
-      "Stroll through the botanical gardens and take photos."
-    ];
-    const afternoonActs = [
-      "Visit the high-end shopping district and local boutiques.",
-      "Join a traditional cooking class hosted by a local chef.",
-      "Rent bicycles and explore the waterfront path.",
-      "Relax at a top-rated local café and write in a travel journal.",
-      "Boat cruise down the central river to see the architecture."
-    ];
-    const eveningActs = [
-      "Enjoy a gourmet dinner at a rooftop restaurant overlooking the skyline.",
-      "Catch a live cultural performance or local acoustic music show.",
-      "Take a guided night walk through the neon-lit food alleys.",
-      "Sunset drinks by the beach or lakeside boardwalk.",
-      "Attend a wine tasting session at a historic cellar."
-    ];
-
-    for (let i = 1; i <= days; i++) {
-      const mIdx = (i - 1) % morningActs.length;
-      const aIdx = i % afternoonActs.length;
-      const eIdx = (i + 1) % eveningActs.length;
-      itinerary.push({
-        day: i,
-        title: `Exploring the Wonders of ${dest}`,
-        morning_title: "Morning Adventure",
-        morning: morningActs[mIdx],
-        afternoon_title: "Afternoon Sightseeing",
-        afternoon: afternoonActs[aIdx],
-        evening_title: "Evening & Dinner",
-        evening: eveningActs[eIdx]
-      });
-    }
-
-    const total = formData.budget;
-    const accommodation = Math.round(total * 0.35);
-    const transport = Math.round(total * 0.20);
-    const food = Math.round(total * 0.25);
-    const sightseeing = Math.round(total * 0.12);
-    const misc = Math.round(total * 0.08);
-
-    const budget = {
-      "Accommodation": accommodation,
-      "Transport": transport,
-      "Food": food,
-      "Sightseeing": sightseeing,
-      "Miscellaneous": misc
-    };
-
-    const attractions = [
-      {
-        name: `The Grand Plaza of ${dest}`,
-        desc: `The bustling, historic heart of ${dest}, surrounded by beautiful classical architecture and lively street performances.`,
-        rating: 4.8,
-        reviews: 2430,
-        image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=500&auto=format&fit=crop&q=60"
-      },
-      {
-        name: `${dest} National Art Museum`,
-        desc: "Housing a collection of historical artifacts and masterpieces from local and international artists alike.",
-        rating: 4.7,
-        reviews: 1560,
-        image: "https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=500&auto=format&fit=crop&q=60"
-      },
-      {
-        name: "Riverfront Promenade",
-        desc: "A beautiful, scenic tree-lined walkway perfect for an afternoon stroll or watching the sunset over the city.",
-        rating: 4.9,
-        reviews: 3200,
-        image: "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=500&auto=format&fit=crop&q=60"
-      }
-    ];
-
-    const hotels = [
-      {
-        name: `The Grand Heritage Hotel`,
-        price: `₹${Math.round(accommodation / days * 0.6).toLocaleString('en-IN')}/night`,
-        desc: "Premium accommodation with exceptional service, featuring a panoramic sky terrace and spa.",
-        rating: 4.6,
-        reviews: 420,
-        image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500&auto=format&fit=crop&q=60"
-      },
-      {
-        name: "Urban Boutique Hotel",
-        price: `₹${Math.round(accommodation / days * 0.4).toLocaleString('en-IN')}/night`,
-        desc: "A stylish, modern hotel in the city center within walking distance of primary sights.",
-        rating: 4.5,
-        reviews: 280,
-        image: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=500&auto=format&fit=crop&q=60"
-      }
-    ];
-
-    const foods = [
-      { emoji: "🍲", name: `Traditional Local Stew`, desc: "A hearty slow-cooked stew combining fresh seasonal vegetables and local herbs." },
-      { emoji: "🥐", name: "Fresh Street Bakery Platter", desc: "Crispy, hand-rolled pastries baked fresh daily, famous in the city center." },
-      { emoji: "🍛", name: "Spiced Street Rice", desc: "A savory street-food staple featuring aromatic rice, local spices, and grilled toppings." },
-      { emoji: "🍧", name: "Glazed Shaved Ice", desc: "A popular local dessert infused with fruit syrups and sweetened condensed milk." }
-    ];
-
-    const packing = [
-      "Comfortable walking shoes",
-      "Camera or smartphone for pictures",
-      "Universal travel adapter",
-      "Light waterproof jacket",
-      "Refillable water bottle",
-      "Local currency cash"
-    ];
-
-    const transportGuide = [
-      { type: "Metro System", efficiency: "Highly Recommended" },
-      { type: "Bicycle Rental", efficiency: "Eco-Friendly & Fun" },
-      { type: "Ride-Sharing Apps", efficiency: "Convenient at Night" }
-    ];
-
-    const safety = [
-      { icon: "🛡️", title: "Secure Belongings", desc: "Keep personal items secure, especially in crowded tourist hotspots." },
-      { icon: "💡", title: "Stay Hydrated", desc: "Drink plenty of bottled water while exploring under the sun." },
-      { icon: "📞", title: "Emergency Contacts", desc: "Save local emergency services numbers and the address of your embassy." }
-    ];
-
-    return {
-      badge: "Plan Simulated",
-      title: `Grand Getaway to ${dest}`,
-      subtitle: `${days} Days • ${formData.travelers} Traveler(s) • Styles: ${styles.join(', ')}`,
-      overview: `Discover the gorgeous sights of ${dest}. This custom travel plan provides a balanced mix of adventure, relaxation, local food, and sights curated specifically for you.`,
-      itinerary,
-      budget,
-      totalBudget: total,
-      weather,
-      packing,
-      attractions,
-      hotels,
-      foods,
-      transport: transportGuide,
-      safety
-    };
-  }
-
   async function fetchWebhook(formData) {
     const response = await fetch(WEBHOOK_URL, {
       method: "POST",
@@ -1180,43 +844,14 @@ Interests/Preferences: ${formData.preferences || 'General exploration'}`;
       preferences: preferencesVal
     };
 
-    const savedApiKey = localStorage.getItem('gemini_api_key');
-    let travelPlan;
-
-    if (savedApiKey && savedApiKey.trim()) {
-      console.log('[planner] Gemini API Key detected. Using Gemini direct AI model...');
-      setPlannerLoadingState(true, "Crafting your AI travel plan via Gemini...");
-      try {
-        travelPlan = await generateTripWithGemini(formData, savedApiKey.trim());
-        console.log('[planner] Successfully generated trip via Gemini API.');
-      } catch (geminiErr) {
-        console.error('[planner] Gemini AI generation failed, attempting n8n webhook fallback...', geminiErr);
-        setPlannerLoadingState(true, "Gemini failed. Falling back to n8n webhook...");
-        try {
-          const rawData = await fetchWebhook(formData);
-          travelPlan = normalizeN8nResponse(rawData);
-          console.log('[planner] Successfully generated trip via n8n webhook fallback.');
-        } catch (webhookErr) {
-          console.error('[planner] Webhook fallback failed, using local simulation...', webhookErr);
-          travelPlan = generateTripSimulated(formData);
-          showToast("Offline mode: Simulated plan generated!");
-        }
-      }
-    } else {
-      console.log('[planner] No Gemini API key found. Attempting custom n8n webhook...');
-      setPlannerLoadingState(true, "Connecting to n8n Webhook...");
-      try {
-        const rawData = await fetchWebhook(formData);
-        travelPlan = normalizeN8nResponse(rawData);
-        console.log('[planner] Successfully generated trip via n8n webhook.');
-      } catch (webhookErr) {
-        console.error('[planner] Webhook failed. Using local simulation...', webhookErr);
-        travelPlan = generateTripSimulated(formData);
-        showToast("No API Key configured. Simulated plan generated!");
-      }
-    }
+    console.log('[planner] Sending request to n8n webhook...', { url: WEBHOOK_URL, payload: formData });
+    setPlannerLoadingState(true, "Connecting to n8n Webhook...");
 
     try {
+      const rawData = await fetchWebhook(formData);
+      const travelPlan = normalizeN8nResponse(rawData);
+      console.log('[planner] Normalized travel plan:', travelPlan);
+
       // Save to application state
       console.log('[planner] Storing results in application state (appState)...');
       appState.formData = formData;
@@ -1225,10 +860,11 @@ Interests/Preferences: ${formData.preferences || 'General exploration'}`;
       setPlannerLoadingState(false);
       console.log('[planner] Triggering UI results rendering...');
       showPlannerResults();
+      showToast("Trip generated successfully!");
     } catch (err) {
       setPlannerLoadingState(false);
-      console.error('[planner] Rendering results failed:', err);
-      showToast(`UI rendering error: ${err.message}`);
+      console.error('[planner] Trip generation failed:', err);
+      showToast(`Network/API error: ${err.message}`);
     }
   }
 
